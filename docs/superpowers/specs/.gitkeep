@@ -1,0 +1,5 @@
+# v2 brainstorming specs
+
+Each sub-project has a design spec written here before implementation begins.
+
+File naming: `YYYY-MM-DD-<sub-project>-design.md`

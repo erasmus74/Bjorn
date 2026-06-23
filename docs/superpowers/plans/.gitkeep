@@ -1,0 +1,5 @@
+# v2 implementation plans
+
+Each spec produces an implementation plan written here before code changes begin.
+
+File naming: `YYYY-MM-DD-<sub-project>-plan.md`
