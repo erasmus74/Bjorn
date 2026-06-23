@@ -121,3 +121,8 @@ class WiFiInterface:
             return ScanResult(observations=[], scanned_at=iso_timestamp())
         observations = parse_iw_scan_output(result.stdout)
         return ScanResult(observations=observations, scanned_at=iso_timestamp())
+
+    def halt_transmissions(self) -> None:
+        """Kill-switch hook. Passive scan mode has no transmissions to halt;
+        future monitor-mode work (deauth, evil AP) will override."""
+        return
