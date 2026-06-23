@@ -44,9 +44,9 @@ def test_insert_with_full_fields(repos):
         details={"wordlist": "rockyou.txt", "line": 1234},
     )
     fetched = repo.list_recent(limit=1)[0]
-    assert fetched["target_network_id"] == net.id
-    assert fetched["stage_name"] == "credential_attack"
-    assert json.loads(fetched["details_json"])["wordlist"] == "rockyou.txt"
+    assert fetched.target_network_id == net.id
+    assert fetched.stage_name == "credential_attack"
+    assert json.loads(fetched.details_json)["wordlist"] == "rockyou.txt"
 
 
 def test_list_recent_orders_desc(repos):
@@ -61,7 +61,7 @@ def test_list_recent_orders_desc(repos):
         )
     result = repo.list_recent(limit=3)
     assert len(result) == 3
-    assert result[0]["timestamp"] > result[1]["timestamp"] > result[2]["timestamp"]
+    assert result[0].timestamp > result[1].timestamp > result[2].timestamp
 
 
 def test_list_recent_filter_by_network(repos):
@@ -72,7 +72,7 @@ def test_list_recent_filter_by_network(repos):
     repo.insert("active", "x", "b.started", target_network_id=n2.id, outcome="started")
     result = repo.list_for_network(network_id=n1.id, limit=10)
     assert len(result) == 1
-    assert result[0]["target_network_id"] == n1.id
+    assert result[0].target_network_id == n1.id
 
 
 def test_count_total(repos):

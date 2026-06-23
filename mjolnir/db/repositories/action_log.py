@@ -87,7 +87,7 @@ class ActionLogRepository:
             details_json=details_json,
         )
 
-    def list_recent(self, limit: int = 50) -> list[sqlite3.Row]:
+    def list_recent(self, limit: int = 50) -> list[ActionLogEntry]:
         cursor = self.conn.execute(
             """
             SELECT * FROM action_log
@@ -96,9 +96,9 @@ class ActionLogRepository:
             """,
             (limit,),
         )
-        return list(cursor.fetchall())
+        return [ActionLogEntry.from_row(r) for r in cursor.fetchall()]
 
-    def list_for_network(self, network_id: int, limit: int = 100) -> list[sqlite3.Row]:
+    def list_for_network(self, network_id: int, limit: int = 100) -> list[ActionLogEntry]:
         cursor = self.conn.execute(
             """
             SELECT * FROM action_log
@@ -108,7 +108,7 @@ class ActionLogRepository:
             """,
             (network_id, limit),
         )
-        return list(cursor.fetchall())
+        return [ActionLogEntry.from_row(r) for r in cursor.fetchall()]
 
     def count_total(self) -> int:
         cursor = self.conn.execute("SELECT COUNT(*) FROM action_log")
