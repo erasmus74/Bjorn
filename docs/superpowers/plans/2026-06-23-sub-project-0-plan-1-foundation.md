@@ -128,6 +128,7 @@ include = ["mjolnir*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+pythonpath = ["."]
 addopts = "-ra --strict-markers"
 markers = [
     "hardware: requires real Pi Zero 2W hardware (deselected by default)",
