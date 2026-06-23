@@ -1,6 +1,6 @@
 from pathlib import Path
 import pytest
-from mjolnir.config import BjornConfig, load_config
+from mjolnir.config import BjornConfig, DbConfig, PathsConfig, load_config
 
 
 def test_load_config_defaults_from_minimal_file(tmp_path: Path):
@@ -43,3 +43,38 @@ data_dir = "/opt/mjolnir/data"
 """)
     cfg = load_config(config_path)
     assert cfg.db.path == Path("/opt/mjolnir/data/mjolnir.db")
+
+
+def test_dbconfig_default_path_matches_data_dir_default():
+    cfg = DbConfig(data_dir=PathsConfig().data_dir)
+    assert cfg.path == Path("/var/lib/mjolnir/mjolnir.db")
+
+
+def test_dbconfig_path_follows_custom_data_dir():
+    cfg = DbConfig(data_dir=Path("/opt/data"))
+    assert cfg.path == Path("/opt/data/mjolnir.db")
+
+
+def test_dbconfig_path_with_custom_filename(tmp_path: Path):
+    cfg = DbConfig(filename="custom.db", data_dir=tmp_path)
+    assert cfg.path == tmp_path / "custom.db"
+
+
+def test_load_config_rejects_absolute_filename(tmp_path: Path):
+    config_path = tmp_path / "bad.toml"
+    config_path.write_text("""
+[db]
+filename = "/etc/passwd"
+""")
+    with pytest.raises(ValueError, match="bare filename"):
+        load_config(config_path)
+
+
+def test_load_config_rejects_filename_with_directory(tmp_path: Path):
+    config_path = tmp_path / "bad.toml"
+    config_path.write_text("""
+[db]
+filename = "subdir/x.db"
+""")
+    with pytest.raises(ValueError, match="bare filename"):
+        load_config(config_path)

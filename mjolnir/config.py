@@ -14,7 +14,11 @@ class PathsConfig:
 class DbConfig:
     filename: str = "mjolnir.db"
     wal_checkpoint_interval_seconds: int = 3600
-    path: Path = Path("/var/lib/mjolnir/mjolnir.db")
+    data_dir: Path = Path("/var/lib/mjolnir")
+    path: Path = field(default=Path("/var/lib/mjolnir/mjolnir.db"), init=False)
+
+    def __post_init__(self):
+        object.__setattr__(self, "path", self.data_dir / self.filename)
 
 
 @dataclass(frozen=True)
@@ -61,31 +65,21 @@ def load_config(path: Path) -> BjornConfig:
     disk_data = raw.get("disk", {})
 
     paths = PathsConfig(
-        data_dir=Path(paths_data.get("data_dir", "/var/lib/mjolnir")),
-        log_dir=Path(paths_data.get("log_dir", "/var/log/mjolnir")),
+        data_dir=Path(paths_data["data_dir"]) if "data_dir" in paths_data else PathsConfig().data_dir,
+        log_dir=Path(paths_data["log_dir"]) if "log_dir" in paths_data else PathsConfig().log_dir,
     )
 
-    db = DbConfig(
-        filename=db_data.get("filename", "mjolnir.db"),
-        wal_checkpoint_interval_seconds=db_data.get("wal_checkpoint_interval_seconds", 3600),
-        path=paths.data_dir / db_data.get("filename", "mjolnir.db"),
-    )
+    filename = db_data.get("filename", "mjolnir.db")
+    filename_path = Path(filename)
+    if filename_path.is_absolute() or len(filename_path.parents) > 1:
+        raise ValueError(
+            f"db.filename must be a bare filename (no path components): {filename!r}"
+        )
 
-    web = WebConfig(
-        bind_interface=web_data.get("bind_interface", "127.0.0.1"),
-        port=web_data.get("port", 8000),
-        require_auth=web_data.get("require_auth", False),
-    )
+    db = DbConfig(**db_data, data_dir=paths.data_dir)
 
-    nlm = NlmConfig(
-        scan_interval_seconds=nlm_data.get("scan_interval_seconds", 30),
-        stage_pool_size=nlm_data.get("stage_pool_size", 4),
-        stage_memory_limit_mb=nlm_data.get("stage_memory_limit_mb", 25),
-    )
-
-    disk = DiskConfig(
-        warning_gb=disk_data.get("warning_gb", 8),
-        hard_stop_gb=disk_data.get("hard_stop_gb", 16),
-    )
+    web = WebConfig(**web_data)
+    nlm = NlmConfig(**nlm_data)
+    disk = DiskConfig(**disk_data)
 
     return BjornConfig(paths=paths, db=db, web=web, nlm=nlm, disk=disk)
