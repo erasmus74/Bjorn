@@ -1,7 +1,27 @@
 """Repository for the bssid_sightings table."""
 import sqlite3
+from dataclasses import dataclass
 
 from mjolnir.utils import iso_timestamp
+
+
+@dataclass
+class BssidSighting:
+    id: int
+    bssid_id: int
+    seen_at: str
+    signal_dbm: int | None
+    channel: int | None
+
+    @classmethod
+    def from_row(cls, row: sqlite3.Row) -> "BssidSighting":
+        return cls(
+            id=row["id"],
+            bssid_id=row["bssid_id"],
+            seen_at=row["seen_at"],
+            signal_dbm=row["signal_dbm"],
+            channel=row["channel"],
+        )
 
 
 class BssidSightingsRepository:
@@ -21,7 +41,7 @@ class BssidSightingsRepository:
         )
         return int(cursor.lastrowid)
 
-    def list_for_bssid(self, bssid_id: int, limit: int = 100) -> list[sqlite3.Row]:
+    def list_for_bssid(self, bssid_id: int, limit: int = 100) -> list[BssidSighting]:
         cursor = self.conn.execute(
             """
             SELECT * FROM bssid_sightings
@@ -31,7 +51,7 @@ class BssidSightingsRepository:
             """,
             (bssid_id, limit),
         )
-        return list(cursor.fetchall())
+        return [BssidSighting.from_row(r) for r in cursor.fetchall()]
 
     def count_for_bssid(self, bssid_id: int) -> int:
         cursor = self.conn.execute(

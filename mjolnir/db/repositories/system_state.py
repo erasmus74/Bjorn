@@ -30,7 +30,8 @@ class SystemStateRepository:
         return self.get("global_mode") or "view_only"
 
     def set_global_mode(self, mode: str) -> None:
-        assert mode in ("view_only", "active"), f"invalid mode: {mode}"
+        if mode not in ("view_only", "active"):
+            raise ValueError(f"invalid global mode: {mode!r} (must be 'view_only' or 'active')")
         self.set("global_mode", mode)
 
     def engage_kill_switch(self) -> None:

@@ -114,3 +114,30 @@ def test_revoke_persistence_authorization(repo):
     repo.revoke_persistence_authorization(net.id)
     fetched = repo.get_by_id(net.id)
     assert fetched.persistence_authorized == 0
+
+
+def test_create_retries_on_disambiguator_collision(repo):
+    """First _next_disambiguator returns a stale value that collides with a
+    pre-inserted row; retry uses the real value and succeeds."""
+    # Pre-insert a network with disambiguator=1 to create the collision target
+    repo.conn.execute(
+        "INSERT INTO networks (ssid, disambiguator, first_seen) VALUES (?, ?, ?)",
+        ("RaceTest", 1, "2026-01-01T00:00:00Z"),
+    )
+
+    # Stale _next_disambiguator returns 1 first (simulating concurrent insert
+    # already took that slot), then falls through to real implementation
+    real_method = repo._next_disambiguator
+    call_count = {"n": 0}
+
+    def stale_then_real(ssid):
+        if call_count["n"] == 0:
+            call_count["n"] += 1
+            return 1  # stale — collides with the pre-inserted row
+        return real_method(ssid)
+
+    repo._next_disambiguator = stale_then_real
+
+    net = repo.create(ssid="RaceTest")
+    assert net is not None
+    assert net.disambiguator == 2  # the real MAX+1 after retry

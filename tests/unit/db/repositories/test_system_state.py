@@ -40,6 +40,11 @@ def test_set_global_mode(repo):
     assert repo.get_global_mode() == "active"
 
 
+def test_set_global_mode_invalid_raises_value_error(repo):
+    with pytest.raises(ValueError, match="invalid global mode"):
+        repo.set_global_mode("bogus")
+
+
 def test_engage_kill_switch_sets_timestamp(repo):
     repo.engage_kill_switch()
     val = repo.get("kill_switch_engaged")

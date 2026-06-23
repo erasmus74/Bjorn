@@ -57,16 +57,23 @@ class NetworksRepository:
     def create(self, ssid: str, security_type: str | None = None,
                first_seen: str | None = None) -> Network:
         when = first_seen or iso_timestamp()
-        disambiguator = self._next_disambiguator(ssid)
-        cursor = self.conn.execute(
-            """
-            INSERT INTO networks (ssid, disambiguator, security_type, first_seen)
-            VALUES (?, ?, ?, ?)
-            """,
-            (ssid, disambiguator, security_type, when),
-        )
-        net_id = cursor.lastrowid
-        return self.get_by_id(net_id)
+        for attempt in range(2):
+            disambiguator = self._next_disambiguator(ssid)
+            try:
+                cursor = self.conn.execute(
+                    """
+                    INSERT INTO networks (ssid, disambiguator, security_type, first_seen)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (ssid, disambiguator, security_type, when),
+                )
+                net_id = cursor.lastrowid
+                assert net_id is not None
+                return self.get_by_id(net_id)
+            except sqlite3.IntegrityError:
+                if attempt == 1:
+                    raise
+        raise RuntimeError("unreachable")
 
     def _next_disambiguator(self, ssid: str) -> int:
         cursor = self.conn.execute(

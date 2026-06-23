@@ -34,9 +34,9 @@ def test_list_for_bssid_ordered_by_seen_at_desc(repos):
 
     result = sightings.list_for_bssid(b.id, limit=10)
     assert len(result) == 3
-    assert result[0]["seen_at"] == "2026-06-23T11:00:00Z"
-    assert result[1]["seen_at"] == "2026-06-23T10:00:00Z"
-    assert result[2]["seen_at"] == "2026-06-23T09:00:00Z"
+    assert result[0].seen_at == "2026-06-23T11:00:00Z"
+    assert result[1].seen_at == "2026-06-23T10:00:00Z"
+    assert result[2].seen_at == "2026-06-23T09:00:00Z"
 
 
 def test_count_for_bssid(repos):
