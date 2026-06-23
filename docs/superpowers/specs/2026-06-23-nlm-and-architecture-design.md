@@ -15,7 +15,7 @@ Establish the safety substrate and architectural foundation for the v2 Bjorn eff
 - A **kill switch** for instant deactivation of offensive operations
 - A **persistence-authorization framework** requiring two-tier explicit operator opt-in (network + host)
 - An **audit log** recording every offensive action with scope basis
-- A **clean package layout** (`bjorn_v2/`) built alongside v1, which stays as reference
+- A **clean package layout** (`mjolnir/`) built alongside v1, which stays as reference
 - A **Stage ABC** that all future capabilities plug into
 - A **vertical slice** proving every architectural layer end-to-end via `PassiveScanStage`
 
@@ -51,12 +51,12 @@ Resource constraints drive several design choices: SQLite over a heavier DB; Fla
 
 ### Package layout
 
-v1 stays at the repo root, relocated to `v1/` for clarity. v2 lives in `bjorn_v2/`. Both coexist during the v2 build-out; v1 is the reference implementation.
+v1 stays at the repo root, relocated to `v1/` for clarity. v2 lives in `mjolnir/`. Both coexist during the v2 build-out; v1 is the reference implementation.
 
 ```
 bjorn/
 ├── v1/                       ← v1 code relocated here (reference)
-├── bjorn_v2/                 ← v2 package
+├── mjolnir/                 ← v2 package
 │   ├── main.py               ← systemd entrypoint
 │   ├── config.py             ← typed config loader
 │   ├── nlm/                  ← Network Lifecycle Manager
@@ -113,7 +113,7 @@ Flask + Jinja2 templates + HTMX (no SPA framework). Rationale: minimal dependenc
 
 ## Data model
 
-SQLite. One file at `data/bjorn.db`. 22 tables total — full DDL lives in `bjorn_v2/db/schema.sql`. Summary below.
+SQLite. One file at `data/bjorn.db`. 22 tables total — full DDL lives in `mjolnir/db/schema.sql`. Summary below.
 
 ### Connection PRAGMAs
 
@@ -351,7 +351,7 @@ When the device sees an SSID that already exists in the DB, match against the st
 
 ### Boot sequence
 
-1. systemd starts `bjorn.service` → `bjorn_v2.main:main()`
+1. systemd starts `bjorn.service` → `mjolnir.main:main()`
 2. Load typed config from `config/v2_config.toml`. Fail fast on missing required keys.
 3. Initialize SQLite: apply PRAGMAs, run pending migrations, seed `system_state` defaults if fresh DB.
 4. Restore persisted mode: read `system_state.global_mode`. **Fresh install defaults to `view_only`.** Subsequent boots restore the last persisted mode.
@@ -642,14 +642,14 @@ Marked `@pytest.mark.hardware`, skipped in CI.
 
 **Architecture (all layers exercised)**:
 
-- `bjorn_v2/db/` — SQLite, schema (all 22 tables), migrations framework, repositories for tables touched by the slice
-- `bjorn_v2/nlm/` — NLM (main loop, scheduler, state machine, mode/scope/kill-switch)
-- `bjorn_v2/stages/` — Stage ABC, registry, one concrete implementation: `PassiveScanStage`
-- `bjorn_v2/interfaces/` — `InterfaceManager`, `WiFiInterface` (passive scan only), BT/BLE stubs
-- `bjorn_v2/audit/` — `AuditLogger` writing to `action_log`
-- `bjorn_v2/ui/web/` — Flask app with dashboard, networks inventory, network detail, blocklist/preferred-SSID form, settings (mode/kill switch)
-- `bjorn_v2/ui/epd/` — Display state manager + all 14 display states
-- `bjorn_v2/config.py` — typed config loader
+- `mjolnir/db/` — SQLite, schema (all 22 tables), migrations framework, repositories for tables touched by the slice
+- `mjolnir/nlm/` — NLM (main loop, scheduler, state machine, mode/scope/kill-switch)
+- `mjolnir/stages/` — Stage ABC, registry, one concrete implementation: `PassiveScanStage`
+- `mjolnir/interfaces/` — `InterfaceManager`, `WiFiInterface` (passive scan only), BT/BLE stubs
+- `mjolnir/audit/` — `AuditLogger` writing to `action_log`
+- `mjolnir/ui/web/` — Flask app with dashboard, networks inventory, network detail, blocklist/preferred-SSID form, settings (mode/kill switch)
+- `mjolnir/ui/epd/` — Display state manager + all 14 display states
+- `mjolnir/config.py` — typed config loader
 - `scripts/bjorn.service` — systemd unit
 - `scripts/migrate_v1_to_v2.py` — best-effort migration
 - Tier 1 + Tier 2 tests covering the slice
@@ -673,7 +673,7 @@ Marked `@pytest.mark.hardware`, skipped in CI.
 
 **Migrates**:
 
-- `config/shared_config.json` → selected keys → `system_state` + `bjorn_v2/config.py` defaults
+- `config/shared_config.json` → selected keys → `system_state` + `mjolnir/config.py` defaults
 - `data/output/*.csv` (networks/hosts/ports discovered by v1) → `networks`, `hosts`, `services` tables
 - `data/mac_blacklist.json` → `networks.scope_state='blocklisted'` (matched by BSSID)
 - Captured handshakes in `data/` → `wifi_captures` rows with `crack_status='untried'`
