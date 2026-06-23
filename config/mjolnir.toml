@@ -1,0 +1,24 @@
+# config/mjolnir.toml — default configuration for mjolnir
+# Override by copying to /etc/mjolnir/config.toml or passing --config <path>.
+
+[paths]
+data_dir = "/var/lib/mjolnir"
+log_dir = "/var/log/mjolnir"
+
+[db]
+filename = "mjolnir.db"
+wal_checkpoint_interval_seconds = 3600
+
+[web]
+bind_interface = "127.0.0.1"
+port = 8000
+require_auth = false
+
+[nlm]
+scan_interval_seconds = 30
+stage_pool_size = 4
+stage_memory_limit_mb = 25
+
+[disk]
+warning_gb = 8
+hard_stop_gb = 16
