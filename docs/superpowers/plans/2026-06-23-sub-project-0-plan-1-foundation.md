@@ -24,7 +24,7 @@ mjolnir/                              ← new package root
 ├── db/
 │   ├── __init__.py                   ← exports
 │   ├── connection.py                 ← ConnectionFactory (PRAGMAs, busy_timeout)
-│   ├── schema.sql                    ← full DDL (22 tables, all indexes)
+│   ├── schema.sql                    ← full DDL (23 tables, all indexes)
 │   ├── migrations.py                 ← migration runner (schema_version tracking)
 │   └── repositories/
 │       ├── __init__.py               ← RepositoryBundle dataclass + bundle_for()
@@ -875,7 +875,7 @@ CREATE INDEX IF NOT EXISTS idx_stage_outputs_lookup     ON stage_outputs(network
 
 ```bash
 git add mjolnir/db/schema.sql
-git commit -m "feat(db): full schema DDL (22 tables + 21 indexes)
+git commit -m "feat(db): full schema DDL (23 tables + 21 indexes)
 
 All tables for sub-projects 0-6 defined up front. Empty tables
 cost nothing; future sub-projects fill them in without schema
@@ -1130,7 +1130,13 @@ class MigrationRunner:
         self.conn = conn
 
     def initialize_fresh_db(self) -> None:
-        """Seed system_state defaults on a fresh DB. Idempotent."""
+        """Apply schema and seed system_state defaults on a fresh DB. Idempotent."""
+        # Apply schema first (idempotent via CREATE IF NOT EXISTS) so the
+        # INSERTs below have a target table. Tests call this method on a
+        # bare connection without separate apply_schema().
+        from mjolnir.db.connection import _SCHEMA_SQL_PATH
+        self.conn.executescript(_SCHEMA_SQL_PATH.read_text())
+
         defaults = [
             ("global_mode", "view_only"),
             ("kill_switch_engaged", ""),
@@ -3579,7 +3585,7 @@ Expected: "nothing to commit, working tree clean"
 git tag -a v0.1.0-plan1 -m "Plan 1 of sub-project #0 complete: foundation layer
 
 - mjolnir package skeleton + typed config
-- Full SQLite schema (22 tables, 21 indexes)
+- Full SQLite schema (23 tables, 21 indexes)
 - Connection factory with PRAGMAs
 - Migration framework with version tracking
 - Repositories: system_state, networks, bssids, bssid_sightings, stage_states, stage_outputs, action_log
