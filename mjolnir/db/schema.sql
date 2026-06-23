@@ -138,6 +138,8 @@ CREATE TABLE IF NOT EXISTS stage_outputs (
 );
 
 CREATE TABLE IF NOT EXISTS action_log (
+    -- Audit log: FKs intentionally omit ON DELETE CASCADE so audit records
+    -- survive target deletion (preserves engagement history for legal defense).
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp           TEXT NOT NULL,
     global_mode         TEXT NOT NULL,
@@ -219,7 +221,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     established_at      TEXT NOT NULL,
     last_activity_at    TEXT,
     is_active           INTEGER NOT NULL DEFAULT 1,
-    tunnel_id           INTEGER REFERENCES tunnels(id),
+    tunnel_id           INTEGER REFERENCES tunnels(id),  -- forward reference; tunnels defined below, FK resolved at query time
     notes               TEXT
 );
 
