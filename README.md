@@ -175,3 +175,18 @@ For **detailed information** about **contributing** process go to [Contributing 
 ## 📜 License
 
 2024 - Bjorn is distributed under the MIT License. For more details, please refer to the [LICENSE](LICENSE) file included in this repository.
+
+---
+
+## mjolnir (v2)
+
+v2 is the next-generation platform, built mostly ground-up alongside v1.
+See `docs/ROADMAP.md` for the v2 effort plan, and
+`docs/superpowers/specs/2026-06-23-nlm-and-architecture-design.md` for
+the design.
+
+To initialize the v2 DB:
+
+    python -m mjolnir.main --config config/mjolnir.toml --init-db
+
+For session-state recovery after context loss, see `docs/SESSION-STATE.md`.

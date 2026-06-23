@@ -43,7 +43,9 @@ def test_apply_schema_is_idempotent(tmp_path: Path):
 def test_pragmas_applied(tmp_path: Path):
     factory = ConnectionFactory(db_path=tmp_path / "x.db")
     conn = factory.connect()
-
-    assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
-    assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
-    assert conn.execute("PRAGMA synchronous").fetchone()[0] == 1  # NORMAL
+    try:
+        assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+        assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert conn.execute("PRAGMA synchronous").fetchone()[0] == 1  # NORMAL
+    finally:
+        conn.close()
