@@ -145,3 +145,12 @@ def register_routes(app: Flask) -> None:
         finally:
             conn.close()
         return redirect(url_for("settings"))
+
+    @app.route("/audit")
+    def audit_log():
+        conn, bundle = _get_bundle(app)
+        try:
+            actions = bundle.action_log.list_recent(limit=200)
+            return render_template("audit.html", actions=actions)
+        finally:
+            conn.close()

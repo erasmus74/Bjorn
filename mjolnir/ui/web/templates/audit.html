@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}mjolnir — Audit Log{% endblock %}
+{% block content %}
+<h1>Audit Log (last 200)</h1>
+{% if actions %}
+<table>
+    <tr>
+        <th>Timestamp</th><th>Mode</th><th>Action</th><th>Outcome</th>
+        <th>Scope Basis</th><th>Network</th><th>Details</th>
+    </tr>
+    {% for a in actions %}
+    <tr>
+        <td>{{ a.timestamp }}</td>
+        <td>{{ a.global_mode }}</td>
+        <td>{{ a.action_type }}</td>
+        <td>{{ a.outcome }}</td>
+        <td>{{ a.scope_basis }}</td>
+        <td>{% if a.target_network_id %}<a href="/networks/{{ a.target_network_id }}">{{ a.target_network_id }}</a>{% else %}—{% endif %}</td>
+        <td class="muted" style="font-family: monospace; font-size: 0.85rem;">{{ a.details_json or "" }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p class="muted">No actions logged.</p>
+{% endif %}
+{% endblock %}
