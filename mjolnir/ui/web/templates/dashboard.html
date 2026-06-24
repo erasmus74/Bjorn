@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}mjolnir — Dashboard{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<p>
+    Mode:
+    {% if global_mode == "active" %}
+        <span class="badge badge-active">ACTIVE</span>
+    {% else %}
+        <span class="badge badge-view-only">VIEW-ONLY</span>
+    {% endif %}
+    {% if kill_switch_engaged %}
+        <span class="badge badge-killed">KILL SWITCH ENGAGED</span>
+    {% endif %}
+</p>
+
+<h2>Networks ({{ networks|length }} eligible)</h2>
+{% if networks %}
+<table>
+    <tr><th>SSID</th><th>Security</th><th>Last Seen</th><th>Current Stage</th></tr>
+    {% for net in networks %}
+    <tr>
+        <td><a href="/networks/{{ net.id }}">{{ net.ssid }}{% if net.disambiguator > 1 %} #{{ net.disambiguator }}{% endif %}</a></td>
+        <td>{{ net.security_type or "unknown" }}</td>
+        <td>{{ net.last_seen or "never" }}</td>
+        <td>{{ net.current_stage or "—" }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p class="muted">No networks discovered yet. Ensure the NLM daemon is running.</p>
+{% endif %}
+
+<h2>Recent Actions</h2>
+{% if recent_actions %}
+<table>
+    <tr><th>Time</th><th>Action</th><th>Mode</th><th>Outcome</th></tr>
+    {% for action in recent_actions %}
+    <tr>
+        <td>{{ action.timestamp }}</td>
+        <td>{{ action.action_type }}</td>
+        <td>{{ action.global_mode }}</td>
+        <td>{{ action.outcome }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p class="muted">No actions logged yet.</p>
+{% endif %}
+{% endblock %}
