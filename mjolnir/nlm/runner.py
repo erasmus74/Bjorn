@@ -5,6 +5,7 @@ memory isolation, constructs NetworkContext, runs the stage, sends
 result back via pipe.
 """
 import resource
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,36 @@ from mjolnir.db.repositories import bundle_for
 from mjolnir.interfaces.manager import InterfaceManager
 from mjolnir.stages.base import Checkpoint, NetworkContext
 from mjolnir.stages.registry import registry
+
+
+def _watch_pipe_for_cancel(pipe: Any, checkpoint: Checkpoint) -> None:
+    """Daemon thread that polls the parent end of the pipe for cancel
+    messages and propagates them to the Checkpoint token.
+
+    The parent sends `{"cmd": "cancel"}` when the kill switch engages.
+    Stages polling `checkpoint.is_cancelled()` see the cancellation and
+    can exit cleanly, preserving any work-in-progress checkpoints.
+
+    Returns when:
+      - A cancel message is received (after setting the checkpoint).
+      - The pipe is closed (EOFError / OSError) — parent went away.
+      - Any unexpected error occurs — never crash the watcher.
+    """
+    while True:
+        try:
+            if not pipe.poll(0.1):
+                continue
+            msg = pipe.recv()
+        except (EOFError, OSError):
+            # Pipe closed by parent — nothing more to read.
+            return
+        except Exception:
+            # Transient error (e.g. unpickling) — keep watching.
+            continue
+
+        if isinstance(msg, dict) and msg.get("cmd") == "cancel":
+            checkpoint.cancel(reason="kill_switch")
+            return
 
 
 def run_stage_in_subprocess(
@@ -64,6 +95,15 @@ def run_stage_in_subprocess(
             workdir=Path(db_path).parent / "stages" / str(network_id) / stage_name,
             checkpoint=checkpoint,
         )
+
+        # Spawn a daemon thread that watches the pipe for cancel messages
+        # from the parent. When received, sets checkpoint so stage.run()
+        # can exit cooperatively at its next checkpoint poll.
+        threading.Thread(
+            target=_watch_pipe_for_cancel,
+            args=(pipe, checkpoint),
+            daemon=True,
+        ).start()
 
         stage = stage_cls()
         result = stage.run(ctx, checkpoint)

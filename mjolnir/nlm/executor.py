@@ -27,6 +27,9 @@ _CTX = mp.get_context("fork")
 # Grace periods for cooperative shutdown.
 _TERMINATE_GRACE_SECONDS = 2.0
 _KILL_GRACE_SECONDS = 1.0
+# Time the parent waits after sending cancel for the child to exit
+# cooperatively before falling back to SIGTERM.
+_COOPERATIVE_CANCEL_GRACE_SECONDS = 2.0
 
 
 @dataclass
@@ -60,7 +63,10 @@ class StageExecutor:
         network_id: int,
         timeout_seconds: int,
     ) -> ExecutionResult:
-        parent_conn, child_conn = _CTX.Pipe(duplex=False)
+        # duplex=True so the parent can send {"cmd": "cancel"} to the
+        # child's pipe-watcher thread. The child still uses the same end
+        # to send its result back to the parent.
+        parent_conn, child_conn = _CTX.Pipe(duplex=True)
         proc = _CTX.Process(
             target=run_stage_in_subprocess,
             args=(
@@ -75,14 +81,13 @@ class StageExecutor:
         proc.start()
         child_conn.close()
 
-        # Watcher: signals when the kill switch engages. The cancel
-        # message is best-effort — Plan 2a does not yet have a
-        # pipe-reading cooperative-cancel thread inside the child, so
-        # the parent must also terminate the child to make the kill
-        # switch deterministic. Plan 2b will add cooperative cancel
-        # propagation; the parent-side terminate remains as the
-        # authoritative backstop.
+        # Watcher: signals when the kill switch engages. Once tripped,
+        # we send the cancel message and start the cooperative-cancel
+        # grace timer. If the child doesn't exit within the grace
+        # period, we fall back to SIGTERM as the authoritative backstop.
         kill_engaged = {"value": False}
+        cancel_sent = {"value": False}
+        grace_deadline: float | None = None
 
         def watch_kill_switch():
             while proc.is_alive() and not kill_engaged["value"]:
@@ -105,13 +110,24 @@ class StageExecutor:
                 outcome = "result"
                 break
 
-            # Kill switch tripped — terminate the child for a deterministic
-            # cancellation. The cooperative cancel message would have been
-            # sent in 2b; here we just SIGTERM/SIGKILL.
+            # Kill switch tripped — send cooperative cancel, then wait
+            # for the child to exit on its own. Only fall back to
+            # SIGTERM if the grace period elapses without a result.
             if kill_engaged["value"] and proc.is_alive():
-                _terminate_chain(proc)
-                outcome = "killed"
-                break
+                if not cancel_sent["value"]:
+                    try:
+                        parent_conn.send({"cmd": "cancel"})
+                    except Exception:
+                        # Pipe may already be closed if the child raced
+                        # to exit. Fall through to terminate chain.
+                        pass
+                    cancel_sent["value"] = True
+                    grace_deadline = time.monotonic() + _COOPERATIVE_CANCEL_GRACE_SECONDS
+
+                if grace_deadline is not None and time.monotonic() > grace_deadline:
+                    _terminate_chain(proc)
+                    outcome = "killed"
+                    break
 
             # Hard timeout.
             if proc.is_alive() and time.monotonic() > deadline:
@@ -126,6 +142,10 @@ class StageExecutor:
                 break
 
         watcher.join(timeout=0.5)
+        try:
+            parent_conn.close()
+        except Exception:
+            pass
 
         if outcome == "timeout":
             return ExecutionResult(status="failed", error=f"timeout_after_{timeout_seconds}s")
