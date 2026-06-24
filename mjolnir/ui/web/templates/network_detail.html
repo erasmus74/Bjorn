@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}mjolnir — {{ network.ssid }}{% endblock %}
+{% block content %}
+<h1>{{ network.ssid }}{% if network.disambiguator > 1 %} #{{ network.disambiguator }}{% endif %}</h1>
+
+<p>
+    <strong>Security:</strong> {{ network.security_type or "unknown" }}<br>
+    <strong>Scope:</strong> {{ network.scope_state }}<br>
+    <strong>First seen:</strong> {{ network.first_seen }}<br>
+    <strong>Last seen:</strong> {{ network.last_seen or "never" }}<br>
+    <strong>Current stage:</strong> {{ network.current_stage or "—" }}<br>
+    <strong>Exhausted:</strong> {% if network.exhausted %}yes ({{ network.exhausted_reason }}){% else %}no{% endif %}
+</p>
+
+<h2>BSSIDs ({{ bssids|length }})</h2>
+{% if bssids %}
+<table>
+    <tr><th>BSSID</th><th>Channel</th><th>Signal (dBm)</th><th>Last Seen</th></tr>
+    {% for b in bssids %}
+    <tr>
+        <td>{{ b.bssid }}</td>
+        <td>{{ b.channel or "—" }}</td>
+        <td>{{ b.last_signal_dbm or "—" }}</td>
+        <td>{{ b.last_seen }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p class="muted">No BSSIDs recorded.</p>
+{% endif %}
+
+<h2>Recent Actions (this network)</h2>
+{% if actions %}
+<table>
+    <tr><th>Time</th><th>Action</th><th>Outcome</th><th>Scope Basis</th></tr>
+    {% for a in actions %}
+    <tr>
+        <td>{{ a.timestamp }}</td>
+        <td>{{ a.action_type }}</td>
+        <td>{{ a.outcome }}</td>
+        <td>{{ a.scope_basis }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p class="muted">No actions for this network.</p>
+{% endif %}
+
+<div class="danger-zone">
+    <h2>Persistence Authorization</h2>
+    <p class="muted">
+        Persistence modifies target systems. Requires both network-level
+        and (for specific hosts) host-level authorization.
+    </p>
+    <form method="post" action="/networks/{{ network.id }}/persistence">
+        {% if network.persistence_authorized %}
+            <p>Network persistence is <strong>authorized</strong> by {{ network.persistence_authorized_by }} at {{ network.persistence_authorized_at }}.</p>
+            <button type="submit" class="danger" name="action" value="revoke">Revoke Network Authorization</button>
+        {% else %}
+            <p>Network persistence is <strong>not authorized</strong>.</p>
+            <label>Confirm by typing the SSID "{{ network.ssid }}":
+                <input type="text" name="confirm_ssid" required>
+            </label>
+            <button type="submit" name="action" value="grant">Authorize Persistence on This Network</button>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

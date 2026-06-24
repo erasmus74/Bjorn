@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}mjolnir — Networks{% endblock %}
+{% block content %}
+<h1>Networks</h1>
+{% if networks %}
+<table>
+    <tr>
+        <th>SSID</th><th>Disambiguator</th><th>Security</th>
+        <th>Scope</th><th>Last Seen</th><th>Stage</th><th>Exhausted</th>
+    </tr>
+    {% for net in networks %}
+    <tr>
+        <td><a href="/networks/{{ net.id }}">{{ net.ssid }}</a></td>
+        <td>#{{ net.disambiguator }}</td>
+        <td>{{ net.security_type or "unknown" }}</td>
+        <td>{{ net.scope_state }}</td>
+        <td>{{ net.last_seen or "never" }}</td>
+        <td>{{ net.current_stage or "—" }}</td>
+        <td>{% if net.exhausted %}yes{% else %}no{% endif %}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p class="muted">No networks discovered yet.</p>
+{% endif %}
+{% endblock %}

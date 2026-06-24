@@ -31,3 +31,30 @@ def register_routes(app: Flask) -> None:
             )
         finally:
             conn.close()
+
+    @app.route("/networks")
+    def networks_inventory():
+        conn, bundle = _get_bundle(app)
+        try:
+            networks = bundle.networks.list_eligible_for_processing()
+            return render_template("networks.html", networks=networks)
+        finally:
+            conn.close()
+
+    @app.route("/networks/<int:network_id>")
+    def network_detail(network_id: int):
+        conn, bundle = _get_bundle(app)
+        try:
+            network = bundle.networks.get_by_id(network_id)
+            if network is None:
+                return "Network not found", 404
+            bssids = bundle.bssids.list_for_network(network_id)
+            actions = bundle.action_log.list_for_network(network_id, limit=50)
+            return render_template(
+                "network_detail.html",
+                network=network,
+                bssids=bssids,
+                actions=actions,
+            )
+        finally:
+            conn.close()
