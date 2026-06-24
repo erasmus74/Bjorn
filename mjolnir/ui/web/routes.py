@@ -154,3 +154,41 @@ def register_routes(app: Flask) -> None:
             return render_template("audit.html", actions=actions)
         finally:
             conn.close()
+
+    @app.route("/networks/<int:network_id>/persistence", methods=["POST"])
+    def network_persistence(network_id: int):
+        action = request.form.get("action")
+        if action not in ("grant", "revoke"):
+            return "invalid action", 400
+
+        conn, bundle = _get_bundle(app)
+        try:
+            network = bundle.networks.get_by_id(network_id)
+            if network is None:
+                return "network not found", 404
+
+            if action == "grant":
+                confirm = request.form.get("confirm_ssid", "")
+                if confirm != network.ssid:
+                    return f"confirmation failed: you must type the SSID '{network.ssid}' exactly", 400
+                bundle.networks.authorize_persistence(network_id, by="operator")
+                bundle.action_log.insert(
+                    global_mode=bundle.system_state.get_global_mode(),
+                    scope_basis="operator-authorized-network-persistence",
+                    action_type=f"persistence.authorized.network.{network_id}",
+                    target_network_id=network_id,
+                    outcome="completed",
+                    details={"ssid": network.ssid},
+                )
+            else:  # revoke
+                bundle.networks.revoke_persistence_authorization(network_id)
+                bundle.action_log.insert(
+                    global_mode=bundle.system_state.get_global_mode(),
+                    scope_basis="operator-revoked-network-persistence",
+                    action_type=f"persistence.revoked.network.{network_id}",
+                    target_network_id=network_id,
+                    outcome="completed",
+                )
+        finally:
+            conn.close()
+        return redirect(url_for("network_detail", network_id=network_id))
