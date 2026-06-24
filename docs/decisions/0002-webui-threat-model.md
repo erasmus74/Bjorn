@@ -53,17 +53,51 @@ The finding becomes real when `/credentials` and `/loot` land. At that point, re
 
 This is captured here so it isn't forgotten when those routes are built. No code change in Plan 3a.
 
+### Finding 3: Cross-Site Request Forgery (CSRF) — deferred to sub-project #1
+
+Automated review flagged CSRF on the state-changing POST routes (`/settings/mode`, `/settings/kill_switch`, `/networks/<id>/scope`, `/networks/<id>/persistence`, `/blocklist`).
+
+This is the most substantive of the three findings. CSRF exploits browser behavior to make the operator's own browser issue requests to the trusted WebUI. Unlike rate limiting, CSRF applies even in the trusted-context model because it doesn't require the attacker to be authenticated — it rides on the browser's automatic request sending.
+
+**Why it's deferred for sub-project #0 specifically:**
+
+- The WebUI binds to `127.0.0.1` in #0 (SSH port-forward access only). Cross-origin POSTs to `127.0.0.1` are increasingly blocked by browsers via Private Network Access (Chrome) and equivalent policies. The attack surface is small but non-zero.
+- The highest-stakes endpoint (`/networks/<id>/persistence`) is already CSRF-resistant: it requires the operator to type the SSID exactly, which a CSRF attacker cannot know.
+- The vulnerable endpoints (`/settings/mode` → ACTIVE, `/settings/kill_switch`) are operator-convenience controls. A successful CSRF would either halt work (annoying, reversible) or enable active mode (concerning — enables offensive operations without operator intent).
+
+**Why it MUST be fixed in sub-project #1:**
+
+When the bind interface changes from `127.0.0.1` to `tailscale0`, the WebUI becomes reachable from the operator's tailnet — and any malicious website the operator visits (on a browser also on the tailnet) could CSRF the state-changing endpoints. The Private Network Access mitigation no longer applies.
+
+**Planned fix (sub-project #1):** Origin-header check on all POST routes. ~10 lines:
+
+```python
+@app.before_request
+def _check_origin():
+    if request.method in ("POST", "PUT", "DELETE"):
+        origin = request.headers.get("Origin")
+        if origin is not None:
+            expected = request.host_url.rstrip("/")
+            if not origin.startswith(expected):
+                abort(403, "cross-origin POST rejected")
+```
+
+This blocks cross-site attacks while keeping the plain HTML forms working (same-origin POSTs omit the Origin header, which we accept; cross-origin POSTs include it, which we reject if mismatched). Chosen over CSRF tokens (Flask-WTF) because it requires no dependency and no template changes.
+
 ## Consequences
 
 **Positive:**
 - Plan 3a ships without security-theater complexity
 - Threat model is explicit and auditable
 - The click-to-reveal requirement is documented for future implementers
+- CSRF mitigation is designed and waiting for sub-project #1
 
 **Negative:**
-- A future reviewer running the same scanner will see the same finding; they'll need to find this ADR to understand why it's accepted
-- If the bind interface ever becomes public (against the spec), the lack of rate limiting becomes a real vulnerability
+- A future reviewer running the same scanner will see the same findings; they'll need to find this ADR to understand why they're accepted
+- If the bind interface ever becomes public (against the spec), the lack of rate limiting and CSRF protection both become real vulnerabilities
+- CSRF protection in #0 relies on browser Private Network Access, which is still evolving and not universal across browsers
 
 **Tracking:**
 - Revisit Finding 2 when `/credentials` route is implemented (sub-project #3 or #4)
 - Revisit Finding 1 if the bind interface changes from `tailscale0`/`127.0.0.1` to anything public
+- **Revisit Finding 3 when the bind interface changes to `tailscale0` (sub-project #1)** — Origin-header check MUST land then
