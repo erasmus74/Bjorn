@@ -296,7 +296,7 @@ require_auth = false
 [nlm]
 scan_interval_seconds = 30
 stage_pool_size = 4
-stage_memory_limit_mb = 25
+stage_memory_limit_mb = 128
 
 [disk]
 warning_gb = 8
@@ -413,7 +413,7 @@ class WebConfig:
 class NlmConfig:
     scan_interval_seconds: int = 30
     stage_pool_size: int = 4
-    stage_memory_limit_mb: int = 25
+    stage_memory_limit_mb: int = 128
 
 
 @dataclass(frozen=True)
@@ -465,7 +465,7 @@ def load_config(path: Path) -> BjornConfig:
     nlm = NlmConfig(
         scan_interval_seconds=nlm_data.get("scan_interval_seconds", 30),
         stage_pool_size=nlm_data.get("stage_pool_size", 4),
-        stage_memory_limit_mb=nlm_data.get("stage_memory_limit_mb", 25),
+        stage_memory_limit_mb=nlm_data.get("stage_memory_limit_mb", 128),
     )
 
     disk = DiskConfig(

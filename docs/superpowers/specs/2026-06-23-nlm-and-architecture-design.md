@@ -555,12 +555,14 @@ Flask + Jinja                  30 MB
 SQLite (cache + WAL)            4 MB
 EPD framebuffer                 1 MB
 NLM main loop + threading      20 MB
-Per-stage subprocess overhead  20 MB  (~5MB per subprocess × 4 pool)
-Stage working set cap         100 MB  (4 × 25MB avg)
-Buffer/headroom               ~150 MB
+Per-stage subprocess overhead  60 MB  (~15MB per subprocess × 4 pool)
+Stage working set cap         128 MB  (4 × 32MB avg)
+Buffer/headroom                ~62 MB
 ```
 
 **Enforcement**: stages run in **subprocesses** (not just threads), with `resource.setrlimit(RLIMIT_AS, ...)` capping the address space. Threads within the stage share the stage's address space. Runaway stages can't OOM the box.
+
+**Reality check from Plan 2a implementation**: the original spec budgeted 25MB per stage, but `RLIMIT_AS` bounds the *entire* virtual address space — Python interpreter + sqlite3 + WAL cache + stage code is ~60MB before the stage's own allocations. The floor for a functional Python subprocess is ~128MB; the floor with sqlite + WAL is ~128-256MB depending on cache size. Production default in `mjolnir.toml` should be `stage_memory_limit_mb = 128` (not 25); test fixtures can use 256 for safety margin. This still leaves the Pi Zero 2W 512MB total budget with ~62MB headroom when 4 stages run concurrently.
 
 ### CPU
 

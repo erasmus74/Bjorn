@@ -17,7 +17,7 @@ require_auth = false
 [nlm]
 scan_interval_seconds = 30
 stage_pool_size = 4
-stage_memory_limit_mb = 25
+stage_memory_limit_mb = 128
 
 [disk]
 warning_gb = 8

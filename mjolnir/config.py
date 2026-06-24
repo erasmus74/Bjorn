@@ -32,7 +32,7 @@ class WebConfig:
 class NlmConfig:
     scan_interval_seconds: int = 30
     stage_pool_size: int = 4
-    stage_memory_limit_mb: int = 25
+    stage_memory_limit_mb: int = 128
 
 
 @dataclass(frozen=True)
