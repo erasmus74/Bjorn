@@ -59,6 +59,47 @@ def register_routes(app: Flask) -> None:
         finally:
             conn.close()
 
+    @app.route("/blocklist")
+    def blocklist():
+        conn, bundle = _get_bundle(app)
+        try:
+            from mjolnir.db.repositories.networks import Network
+            cursor = bundle.networks.conn.execute(
+                "SELECT * FROM networks WHERE scope_state = 'blocklisted' ORDER BY ssid"
+            )
+            blocked = [Network.from_row(r) for r in cursor.fetchall()]
+            return render_template("blocklist.html", blocked=blocked)
+        finally:
+            conn.close()
+
+    @app.route("/blocklist", methods=["POST"])
+    def blocklist_add():
+        ssid = request.form.get("ssid", "").strip()
+        reason = request.form.get("reason", "").strip() or None
+        if not ssid:
+            return "ssid is required", 400
+
+        conn, bundle = _get_bundle(app)
+        try:
+            net = bundle.networks.create(ssid=ssid)
+            bundle.networks.update_scope_state(net.id, "blocklisted", reason=reason, by="operator")
+        finally:
+            conn.close()
+        return redirect(url_for("blocklist"))
+
+    @app.route("/networks/<int:network_id>/scope", methods=["POST"])
+    def update_network_scope(network_id: int):
+        new_state = request.form.get("scope_state")
+        if new_state not in ("enabled", "disabled", "blocklisted"):
+            return "invalid scope_state", 400
+
+        conn, bundle = _get_bundle(app)
+        try:
+            bundle.networks.update_scope_state(network_id, new_state, by="operator")
+        finally:
+            conn.close()
+        return redirect(url_for("network_detail", network_id=network_id))
+
     @app.route("/settings")
     def settings():
         conn, bundle = _get_bundle(app)

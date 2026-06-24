@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}mjolnir — Blocklist{% endblock %}
+{% block content %}
+<h1>Blocklist</h1>
+
+<h2>Add Network to Blocklist</h2>
+<p class="muted">Preemptively add a network by SSID so mjolnir never attempts offensive operations against it, even if discovered.</p>
+<form method="post" action="/blocklist">
+    <label>SSID: <input type="text" name="ssid" required></label>
+    <label>Reason: <input type="text" name="reason"></label>
+    <button type="submit">Add to Blocklist</button>
+</form>
+
+<h2>Blocklisted Networks ({{ blocked|length }})</h2>
+{% if blocked %}
+<table>
+    <tr><th>SSID</th><th>Reason</th><th>Added</th><th>Actions</th></tr>
+    {% for net in blocked %}
+    <tr>
+        <td>{{ net.ssid }}{% if net.disambiguator > 1 %} #{{ net.disambiguator }}{% endif %}</td>
+        <td>{{ net.blocklist_reason or "—" }}</td>
+        <td>{{ net.scope_changed_at or "—" }}</td>
+        <td>
+            <form method="post" action="/networks/{{ net.id }}/scope" style="display:inline">
+                <input type="hidden" name="scope_state" value="enabled">
+                <button type="submit">Unblock</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p class="muted">No blocklisted networks.</p>
+{% endif %}
+{% endblock %}
