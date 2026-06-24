@@ -78,11 +78,15 @@ def _install_signal_handlers() -> None:
 
 
 def run_daemon(config: BjornConfig) -> int:
-    """Run the NLM main loop until shutdown is requested.
+    """Run the NLM main loop + Flask WebUI until shutdown is requested.
 
     Clears the shutdown flag at start so a previous shutdown signal does
     not leak into a fresh invocation. Polls the flag every 100ms during
     the scan-interval sleep so shutdown is responsive.
+
+    The Flask WebUI runs in a daemon thread so the operator can reach
+    it on config.web.bind_interface:port while the NLM loop runs in
+    the foreground.
     """
     _install_signal_handlers()
     _shutdown_requested.clear()
@@ -94,6 +98,20 @@ def run_daemon(config: BjornConfig) -> int:
         registry=default_registry,
         kill_switch_event=kill_switch_event,
     )
+
+    # Start Flask WebUI in a background thread
+    from mjolnir.ui.web.app import create_app
+    web_app = create_app(config)
+    web_thread = threading.Thread(
+        target=lambda: web_app.run(
+            host=config.web.bind_interface,
+            port=config.web.port,
+            debug=False,
+            use_reloader=False,
+        ),
+        daemon=True,
+    )
+    web_thread.start()
 
     while not _shutdown_requested.is_set():
         try:
