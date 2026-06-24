@@ -1,5 +1,5 @@
 """HTTP routes for mjolnir's WebUI."""
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, url_for
 
 from mjolnir.db.connection import ConnectionFactory
 from mjolnir.db.repositories import bundle_for
@@ -58,3 +58,49 @@ def register_routes(app: Flask) -> None:
             )
         finally:
             conn.close()
+
+    @app.route("/settings")
+    def settings():
+        conn, bundle = _get_bundle(app)
+        try:
+            return render_template(
+                "settings.html",
+                global_mode=bundle.system_state.get_global_mode(),
+                kill_switch_engaged=bundle.system_state.is_kill_switch_engaged(),
+            )
+        finally:
+            conn.close()
+
+    @app.route("/settings/mode", methods=["POST"])
+    def toggle_mode():
+        new_mode = request.form.get("mode")
+        if new_mode not in ("view_only", "active"):
+            return "invalid mode", 400
+
+        conn, bundle = _get_bundle(app)
+        try:
+            from mjolnir.audit.logger import AuditLogger, ScopeBasis
+            audit = AuditLogger(action_log=bundle.action_log, system_state=bundle.system_state)
+            old_mode = bundle.system_state.get_global_mode()
+            bundle.system_state.set_global_mode(new_mode)
+            audit.log_mode_transition(old_mode, new_mode,
+                                       scope_basis=ScopeBasis.OPERATOR_CONFIRMED_ACTIVE_MODE)
+        finally:
+            conn.close()
+        return redirect(url_for("settings"))
+
+    @app.route("/settings/kill_switch", methods=["POST"])
+    def toggle_kill_switch():
+        action = request.form.get("action")
+        if action not in ("engage", "release"):
+            return "invalid action", 400
+
+        conn, bundle = _get_bundle(app)
+        try:
+            if action == "engage":
+                bundle.system_state.engage_kill_switch()
+            else:
+                bundle.system_state.release_kill_switch()
+        finally:
+            conn.close()
+        return redirect(url_for("settings"))

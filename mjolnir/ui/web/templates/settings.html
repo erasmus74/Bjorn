@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}mjolnir — Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+
+<h2>Global Mode</h2>
+<p>
+    Current mode:
+    {% if global_mode == "active" %}
+        <span class="badge badge-active">ACTIVE</span>
+    {% else %}
+        <span class="badge badge-view-only">VIEW-ONLY</span>
+    {% endif %}
+</p>
+<p class="muted">
+    ACTIVE mode enables offensive stages (WiFi crack, credential attacks, exploitation).
+    VIEW-ONLY mode allows only passive observation. The choice persists across reboots.
+</p>
+<form method="post" action="/settings/mode">
+    {% if global_mode == "view_only" %}
+        <input type="hidden" name="mode" value="active">
+        <button type="submit" class="danger">Activate (enable offensive operations)</button>
+    {% else %}
+        <input type="hidden" name="mode" value="view_only">
+        <button type="submit">Return to View-Only</button>
+    {% endif %}
+</form>
+
+<h2>Kill Switch</h2>
+<p>
+    Status: {% if kill_switch_engaged %}<span class="badge badge-killed">ENGAGED</span>{% else %}released{% endif %}
+</p>
+<p class="muted">
+    Engaging the kill switch halts all in-flight offensive work within ~1 second (RF)
+    or ~10 seconds (non-RF). In-flight stages save progress where possible.
+</p>
+<form method="post" action="/settings/kill_switch">
+    {% if kill_switch_engaged %}
+        <input type="hidden" name="action" value="release">
+        <button type="submit">Release Kill Switch</button>
+    {% else %}
+        <input type="hidden" name="action" value="engage">
+        <button type="submit" class="danger">Engage Kill Switch</button>
+    {% endif %}
+</form>
+{% endblock %}
