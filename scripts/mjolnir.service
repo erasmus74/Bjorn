@@ -1,0 +1,39 @@
+# scripts/mjolnir.service
+# systemd unit for mjolnir v2 daemon.
+# Install: sudo cp scripts/mjolnir.service /etc/systemd/system/
+#          sudo systemctl daemon-reload
+#          sudo systemctl enable --now mjolnir
+
+[Unit]
+Description=mjolnir autonomous security-testing daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mjolnir
+Group=mjolnir
+WorkingDirectory=/opt/mjolnir
+ExecStart=/opt/mjolnir/.venv/bin/python -m mjolnir.main --config /etc/mjolnir/config.toml
+ExecStartPre=/opt/mjolnir/.venv/bin/python -m mjolnir.main --config /etc/mjolnir/config.toml --init-db
+
+# Graceful shutdown: SIGTERM, wait up to 30s for stages to checkpoint
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Restart on crash, but not repeatedly
+Restart=on-failure
+RestartSec=10
+
+# Resource limits (defense in depth alongside in-process RLIMIT_AS)
+MemoryMax=400M
+CPUQuota=300%
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/mjolnir /var/log/mjolnir
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

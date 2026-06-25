@@ -169,6 +169,9 @@ def main(argv: list[str] | None = None) -> int:
 
     initialize(config)
 
+    from mjolnir.logging_config import setup_logging
+    log = setup_logging(format="text")  # config-driven format is a follow-up
+
     if args.init_db:
         print(f"initialized db at {config.db.path}")
         return 0
