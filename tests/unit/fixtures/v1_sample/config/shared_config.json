@@ -1,0 +1,8 @@
+{
+    "mac_scan_blacklist": ["00:11:22:33:44:55"],
+    "ip_scan_blacklist": ["192.168.1.1"],
+    "portlist": [22, 80, 443],
+    "scan_interval": 180,
+    "manual_mode": false,
+    "websrv": true
+}

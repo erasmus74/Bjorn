@@ -1,0 +1,4 @@
+MAC Address,IPs,Hostnames,Alive,Ports,ftp_connector,nmap_vuln_scanner,ssh_connector
+aa:bb:cc:dd:ee:01,"192.168.1.10","router.local",1,"22,80,443",success,success,failed
+aa:bb:cc:dd:ee:02,"192.168.1.20,192.168.1.21","server,server-alt",1,"22",failed,success,success
+aa:bb:cc:dd:ee:03,"192.168.1.30","",0,"",failed,failed,failed
