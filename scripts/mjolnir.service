@@ -29,6 +29,16 @@ RestartSec=10
 MemoryMax=400M
 CPUQuota=300%
 
+# Capabilities: passive WiFi scanning shells out to `iw dev wlan0 scan`,
+# which needs CAP_NET_RAW (raw nl80211 sockets) and CAP_NET_ADMIN (scan
+# trigger) even though it does not transmit. Grant just these two to the
+# unprivileged mjolnir user via ambient capabilities so the daemon never
+# runs as root. systemd applies AmbientCapabilities at exec time, so this
+# is compatible with NoNewPrivileges=true; CapabilityBoundingSet caps the
+# absolute ceiling to the same two.
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN
+
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
