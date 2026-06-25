@@ -15,13 +15,18 @@ import signal
 import sys
 import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from mjolnir.config import BjornConfig, load_config
 from mjolnir.db.connection import ConnectionFactory
 from mjolnir.db.migrations import MigrationRunner
+from mjolnir.db.repositories import bundle_for
 from mjolnir.nlm.manager import NetworkLifecycleManager
 from mjolnir.stages import registry as default_registry
+from mjolnir.ui.epd.collector import collect_conditions
+from mjolnir.ui.epd.driver import FakeEPDDriver, RealEPDDriver
+from mjolnir.ui.epd.manager import DisplayManager
 
 
 _shutdown_requested = threading.Event()
@@ -113,17 +118,44 @@ def run_daemon(config: BjornConfig) -> int:
     )
     web_thread.start()
 
+    # Construct display manager. Try real hardware first; fall back to fake
+    # if the EPD library isn't importable (e.g., in tests/CI or dev machines
+    # without the HAT attached).
+    try:
+        display_driver = RealEPDDriver()
+        display_driver.init()
+    except Exception:
+        display_driver = FakeEPDDriver(width=122, height=250)
+        display_driver.init()
+    display = DisplayManager(driver=display_driver)
+
     while not _shutdown_requested.is_set():
         try:
             mgr.run_once()
         except Exception as e:
             print(f"warning: NLM iteration failed: {e}", file=sys.stderr)
+
+        # Update display with current conditions
+        try:
+            db_conn = ConnectionFactory(db_path=config.db.path).connect()
+            bundle = bundle_for(db_conn)
+            conditions = collect_conditions(
+                bundle,
+                kill_switch_event_set=kill_switch_event.is_set(),
+            )
+            conditions = replace(conditions, starting_up=False)
+            display.update(conditions)
+            db_conn.close()
+        except Exception as e:
+            print(f"warning: display update failed: {e}", file=sys.stderr)
+
         # Sleep in 100ms ticks so we notice shutdown promptly.
         for _ in range(config.nlm.scan_interval_seconds * 10):
             if _shutdown_requested.is_set():
                 break
             time.sleep(0.1)
 
+    display.shutdown()
     return 0
 
 
