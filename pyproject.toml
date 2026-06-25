@@ -25,7 +25,15 @@ include = ["mjolnir*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-pythonpath = ["."]
+# importlib import mode + namespace-package awareness: with an editable
+# install (setuptools' import-hook finder) and the package source sitting
+# at the rootdir, the legacy "prepend" mode + pythonpath=["."] made pytest
+# resolve `mjolnir` as a namespace package and fail to find its members
+# ("cannot import name X ... (unknown location)") on some environments
+# (seen on the Pi Zero 2W). importlib mode resolves modules via the
+# installed package's own loader, which is consistent everywhere.
+import-mode = "importlib"
+consider_namespace_packages = true
 addopts = "-ra --strict-markers -m 'not hardware and not subprocess'"
 markers = [
     "hardware: requires real Pi Zero 2W hardware (deselected by default)",
