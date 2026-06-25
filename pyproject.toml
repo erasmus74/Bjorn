@@ -25,16 +25,13 @@ include = ["mjolnir*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-# importlib import mode: with an editable install (setuptools' import-hook
-# finder) and the package source sitting at the rootdir, the legacy
-# "prepend" mode + pythonpath=["."] made pytest resolve `mjolnir` as a
-# namespace package and fail to find its members ("cannot import name X ...
-# (unknown location)") on some environments (seen on the Pi Zero 2W).
-# importlib mode resolves modules via the installed package's own loader,
-# which is consistent everywhere. (consider_namespace_packages is left off
-# on purpose: the tests/ tree is a regular package with __init__.py files,
-# and enabling it makes pytest mis-resolve conftest as `mjolnir.tests`.)
-import-mode = "importlib"
+# pythonpath=["."] puts the repo root on sys.path so the in-tree `mjolnir`
+# package is importable whether or not it is pip-installed. Install mjolnir
+# NON-editable on deployment targets (`pip install .`, not `-e`): the
+# setuptools editable import-hook finder otherwise conflicts with pytest's
+# rootdir handling and resolves `mjolnir` as a namespace package, failing
+# with "cannot import name X ... (unknown location)" (seen on the Pi).
+pythonpath = ["."]
 addopts = "-ra --strict-markers -m 'not hardware and not subprocess'"
 markers = [
     "hardware: requires real Pi Zero 2W hardware (deselected by default)",
