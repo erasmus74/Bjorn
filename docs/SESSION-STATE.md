@@ -1,6 +1,6 @@
 # Bjorn/mjolnir v2 — Session State
 
-**Last updated:** 2026-06-23
+**Last updated:** 2026-06-25
 **Branch:** `feat/v2-platform`
 **Fork:** `erasmus74/Bjorn` (forked from `infinition/bjorn`)
 
@@ -9,8 +9,8 @@ This document is the "if we lose context, read this first" recovery file. It cap
 ## Current state
 
 **Sub-project:** #0 of 6 — Network Lifecycle Manager & v2 Architecture
-**Phase:** Plan 1 of 4 ready to implement
-**Next action:** Begin subagent-driven implementation of Plan 1
+**Status:** Software-complete (`v1.0.0-subproject-0` tagged). Awaits hardware acceptance per `docs/ACCEPTANCE-RUNBOOK.md`.
+**Next action:** Run the 10-criteria acceptance runbook on real Pi Zero 2W hardware, then begin sub-project #1 (connectivity).
 
 ## Quick navigation
 
@@ -32,22 +32,24 @@ Decomposed into 6 ordered sub-projects:
 
 | # | Sub-project | Status |
 |---|---|---|
-| 0 | Authorization/scope/audit framework + foundation + slice | Brainstormed + planned (Plan 1 ready) |
-| 1 | Connectivity layer (BT tether + Tailscale + multi-SSID priority) | Pending |
+| 0 | Authorization/scope/audit framework + foundation + slice | ✅ Software-complete (`v1.0.0-subproject-0`); awaits hardware acceptance |
+| 1 | Connectivity layer (BT tether + Tailscale + multi-SSID priority) | Pending — **CSRF fix (ADR 0002) MUST land here** |
 | 2 | Updated WebGUI & HTTP targeting API | Partially absorbed into #0 |
 | 3 | WiFi offensive layer (automated + targeted cracking) | Pending |
 | 4 | Credential attack orchestration | Pending |
 | 5 | Vulnerability discovery & exploitation (incl. persistence) | Pending |
 | 6 | Autonomy & orchestration integration | Pending |
 
-## Sub-project #0 — the 4-plan breakdown
+## Sub-project #0 — the plan breakdown (all complete)
 
-Each plan ends at a verifiable milestone.
+- **Plan 1 — Foundation** ✅ `v0.1.0-plan1`: config, schema (23 tables), 7 repositories, audit logger, Stage ABC
+- **Plan 2a — NLM framework** ✅ `v0.2.0-plan2a`: interfaces, ESS identity, scope checker, gates, subprocess executor
+- **Plan 2b — PassiveScanStage + daemon** ✅ `v0.3.0-plan2b`: first concrete stage, cooperative cancellation, main.py daemon loop
+- **Plan 3a — Flask WebUI** ✅ `v0.4.0-plan3a`: 10 routes, all operator actions reachable via HTTP
+- **Plan 3b — EPD display** ✅ `v0.5.0-plan3b`: 14 priority-ordered states, refresh strategy, conditions collector
+- **Plan 4 — Ship** ✅ `v1.0.0-subproject-0`: v1→v2 migration, systemd unit, structured logging, install + acceptance docs
 
-- **Plan 1 — Foundation** (`docs/superpowers/plans/2026-06-23-sub-project-0-plan-1-foundation.md`): skeleton + DB + audit + Stage ABC. Tag `v0.1.0-plan1`. **READY TO IMPLEMENT.**
-- **Plan 2 — NLM + First Stage**: `mjolnir/interfaces/`, `mjolnir/nlm/`, `PassiveScanStage`, subprocess-per-stage. Milestone: device boots and discovers a real WiFi network within 60s. **WRITTEN AFTER Plan 1 is implemented.**
-- **Plan 3 — UI**: EPD display manager with 14 states + Flask WebUI. Milestone: operator can see state and toggle mode via both surfaces. **WRITTEN AFTER Plan 2 is implemented.**
-- **Plan 4 — Migration + Acceptance**: v1→v2 data migration script + main.py wiring + systemd unit + all 10 slice acceptance criteria. Milestone: shippable. **WRITTEN AFTER Plan 3 is implemented.**
+Plans live in `docs/superpowers/plans/`. See `docs/ACCEPTANCE-RUNBOOK.md` for the hardware gate.
 
 ## Key design decisions (locked in during brainstorming)
 
