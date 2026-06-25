@@ -69,7 +69,15 @@ class RealEPDDriver:
         import importlib
         module = importlib.import_module(f"resources.waveshare_epd.{self._epd_type}")
         self._epd = module.EPD()
-        self._epd.init(self._epd.FULL_UPDATE)
+        # The 2.13" V4 panel's init() takes no argument (full-refresh is the
+        # default mode). The older V2 library used init(FULL_UPDATE) with a
+        # FULL_UPDATE constant; calling that against V4 raises AttributeError.
+        # Support both: pass FULL_UPDATE only if this library version defines
+        # it, otherwise call the no-arg V4 form.
+        if hasattr(self._epd, "FULL_UPDATE"):
+            self._epd.init(self._epd.FULL_UPDATE)
+        else:
+            self._epd.init()
         self.width = self._epd.width
         self.height = self._epd.height
 
