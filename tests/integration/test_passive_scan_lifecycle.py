@@ -9,6 +9,7 @@ from mjolnir.config import BjornConfig, DbConfig, NlmConfig, PathsConfig
 from mjolnir.db.connection import ConnectionFactory
 from mjolnir.db.migrations import MigrationRunner
 from mjolnir.db.repositories import bundle_for
+from mjolnir.nlm.in_process_executor import InProcessExecutor
 from mjolnir.nlm.manager import NetworkLifecycleManager
 from mjolnir.interfaces.types import BssidObservation, ScanResult
 from mjolnir.interfaces.wifi import WiFiInterface
@@ -67,11 +68,13 @@ def test_nlm_passive_scan_discovers_new_network(configured_db, monkeypatch):
         nlm=NlmConfig(stage_memory_limit_mb=256),
     )
 
+    __ks = mp.Event()
     mgr = NetworkLifecycleManager(
         db_path=configured_db,
         config=cfg,
         registry=reg,
-        kill_switch_event=mp.Event(),
+        kill_switch_event=__ks,
+        executor=InProcessExecutor(db_path=configured_db, registry=reg, kill_switch_event=__ks),
     )
 
     executed = mgr.run_once()
@@ -127,11 +130,13 @@ def test_nlm_passive_scan_resumable_across_runs(configured_db, monkeypatch):
         db=DbConfig(data_dir=configured_db.parent, filename=configured_db.name),
         nlm=NlmConfig(stage_memory_limit_mb=256),
     )
+    __ks = mp.Event()
     mgr = NetworkLifecycleManager(
         db_path=configured_db,
         config=cfg,
         registry=reg,
-        kill_switch_event=mp.Event(),
+        kill_switch_event=__ks,
+        executor=InProcessExecutor(db_path=configured_db, registry=reg, kill_switch_event=__ks),
     )
 
     mgr.run_once()

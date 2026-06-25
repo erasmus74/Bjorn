@@ -1,46 +1,54 @@
-# ADR 0001: Known issue — multiprocessing fork() slows test suite after Phase 2 (Plan 2b)
+# ADR 0001: multiprocessing fork() test isolation (RESOLVED)
 
-- Status: Accepted
-- Date: 2026-06-24
+- Status: Resolved
+- Date: 2026-06-25
 
 ## Context
 
-After Plan 2b Phase 2 (cooperative cancellation via bidirectional `mp.Pipe`), the full test suite runtime jumped from ~2s to ~150s. The slowdown is reproducible and order-dependent:
+After Plan 2b Phase 2 (cooperative cancellation via bidirectional `mp.Pipe`), the full test suite went from ~2s to ~150s, and eventually began **deadlocking entirely** (full suite never completes).
 
-- Running `tests/unit/stages/test_passive_scan.py` alone: 0.04s
-- Running `tests/unit/stages/test_passive_scan.py` + `tests/unit/nlm/`: ~22s (passive_scan first, nlm second)
-- Running the full suite in alphabetical order: ~150s (nlm tests run first, poisoning the pytest process)
+Root cause: the subprocess executor (`StageExecutor`) uses `mp.get_context("fork")` on Linux. Forking from a multi-threaded process can deadlock — the DeprecationWarning explicitly flags this. Multiple contamination sources left the pytest process multi-threaded:
 
-CPython emits a `DeprecationWarning`:
-```
-This process (pid=...) is multi-threaded, use of fork() may lead to deadlocks in the child.
-```
+1. **NLM tests** constructed `StageExecutor` directly, forking on every `run_once()` call
+2. **Flask dev server** (`app.run()`) in the daemon integration test spawned a non-stoppable thread
+3. **Dedicated subprocess executor tests** (10 tests) fork as part of their purpose
 
-This warning fires because the executor's `watch_kill_switch` thread and the cooperative-cancel `mp.Event` shared state leave the pytest main process in a multi-threaded state. Subsequent `fork()` calls (Python 3.14's default for `multiprocessing`) copy larger page tables and hit internal-lock contention, making each fork progressively slower.
+## Resolution (2026-06-25)
 
-The explicit `mp.get_context("fork")` in `mjolnir/nlm/executor.py` (chosen in Plan 2a Phase 5 so test fixtures that monkey-patch the registry are visible to children) is the proximate cause. `forkserver` or `spawn` would avoid the slowdown but lose the monkey-patch visibility.
+Three changes eliminated the deadlock:
 
-## Decision
+### 1. InProcessExecutor — NLM tests no longer fork
 
-Accept the slowdown as a known issue for now. Tests pass; correctness is unaffected; the slowness is a development-experience cost, not a production cost.
+Created `mjolnir/nlm/in_process_executor.py` with `InProcessExecutor` that runs stages in the calling process (same DB, same stage logic, zero forks). `NetworkLifecycleManager` now accepts an injectable `executor` parameter:
 
-Workarounds for fast iteration during development:
-- `pytest tests/unit/stages/ tests/unit/db/` — fast (no subprocess tests)
-- `pytest -k "not executor and not cooperative and not manager"` — skip the subprocess-heavy tests
-- The full `pytest tests/` run is the "before commit / before tag" gate; expect ~2.5 minutes
+- **Production**: `StageExecutor` (subprocess-per-stage with `RLIMIT_AS` isolation)
+- **Tests**: `InProcessExecutor` (no fork, instant, full fidelity on scheduling/scope/gate logic)
+
+All NLM manager tests, passive-scan integration tests, and NLM lifecycle tests now use `InProcessExecutor` → 0 forks in the NLM test suite.
+
+### 2. Stoppable Flask server — daemon test no longer leaks threads
+
+Changed `main.py`'s `run_daemon()` from `web_app.run()` (blocks forever, no shutdown API) to `werkzeug.serving.make_server()` (returns a server object with `shutdown()`). On daemon exit: `server.shutdown()` + `web_thread.join(timeout=5)` fully stops Flask before the process returns.
+
+### 3. Subprocess test isolation — remaining forks run separately
+
+The 10 dedicated executor/runner/cooperative-cancel tests MUST fork (they test the subprocess machinery). These are marked `@pytest.mark.subprocess` and excluded from the default run via `addopts = "-m 'not hardware and not subprocess'"`.
+
+- Default `pytest tests/`: **257 tests, 3.66s** — fast, reliable, zero forks
+- `pytest tests/ -m subprocess`: **10 tests, ~10s** — the fork/pipe/cancel protocol
+- `pytest tests/ -m hardware`: **5 tests** — WiFi + EPD on real Pi (bench-only)
 
 ## Consequences
 
 **Positive:**
-- Test fixtures can monkey-patch module-level state (registry, WiFiInterface) and the changes are visible to forked children — this is load-bearing for the cooperative-cancel and passive-scan integration tests
-- No need for a separate "stage runner" CLI script (which spawn/forkserver would require)
+- Default test suite is fast (3.66s) and never deadlocks
+- NLM tests run at full fidelity via InProcessExecutor (real stages, real DB, real scope/gate logic — just no fork)
+- Subprocess machinery still fully tested (separate run)
+- The `executor` injection point is a clean architecture improvement (test double for execution strategy, not for the stage itself)
 
 **Negative:**
-- Full suite takes ~150s instead of ~2s
-- Fork-from-multi-threaded-process warning on stderr (cosmetic; no actual deadlocks observed)
+- Two test invocations needed for full coverage (`pytest tests/` + `pytest tests/ -m subprocess`)
+- The subprocess tests still emit the `DeprecationWarning` (fork from multi-threaded) — cosmetic, no deadlocks observed when run in isolation
 
-**Future fix options (not pursued now):**
-- Make the executor's watcher threads fully joinable so the pytest process returns to single-threaded between tests
-- Switch to `mp.get_context("spawn")` and serialize test fixtures through a shared config file or environment variables instead of monkey-patching
-- Run subprocess-heavy tests in a subprocess of pytest itself (`pytest-forked` or similar)
-- Migrate to a test-double architecture where the executor accepts an injectable `ProcessFactory` so tests don't fork at all
+**Future improvement (not needed now):**
+Switch `StageExecutor` from `fork` to `spawn` start method. This requires serializing test fixtures through a mechanism that survives re-import (spawn re-imports modules). The `InProcessExecutor` approach makes this unnecessary for now — only the 10 dedicated subprocess tests would benefit, and they run reliably in isolation.

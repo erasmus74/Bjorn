@@ -24,6 +24,9 @@ log_dir = "{tmp_path}/logs"
 [db]
 filename = "test.db"
 
+[web]
+port = 0
+
 [nlm]
 scan_interval_seconds = 1
 stage_pool_size = 1

@@ -1,6 +1,10 @@
 """Tests for the subprocess entry point. We don't actually fork — we call
 the runner function directly with a fake pipe and verify it does the
 right thing."""
+
+import pytest
+
+pytestmark = pytest.mark.subprocess
 import pytest
 from mjolnir.nlm.runner import run_stage_in_subprocess
 from mjolnir.stages.base import Stage, StageResult, ResourceProfile, CheckpointPolicy

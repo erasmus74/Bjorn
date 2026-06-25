@@ -2,6 +2,7 @@
 import pytest
 import multiprocessing as mp
 
+from mjolnir.nlm.in_process_executor import InProcessExecutor
 from mjolnir.nlm.manager import NetworkLifecycleManager
 from mjolnir.stages.base import Stage, StageResult, ResourceProfile, CheckpointPolicy
 from mjolnir.stages.registry import StageRegistry
@@ -60,11 +61,13 @@ def manager(tmp_path, monkeypatch):
         nlm=NlmConfig(stage_memory_limit_mb=_TEST_MEM_LIMIT_MB),
     )
 
+    __ks = mp.Event()
     mgr = NetworkLifecycleManager(
         db_path=tmp_path / "x.db",
         config=cfg,
         registry=reg,
-        kill_switch_event=mp.Event(),
+        kill_switch_event=__ks,
+        executor=InProcessExecutor(db_path=tmp_path / "x.db", registry=reg, kill_switch_event=__ks),
     )
     return mgr
 
@@ -100,11 +103,13 @@ def test_find_eligible_work_empty_when_no_networks(tmp_path, monkeypatch):
         db=DbConfig(data_dir=tmp_path),
         nlm=NlmConfig(stage_memory_limit_mb=_TEST_MEM_LIMIT_MB),
     )
+    __ks = mp.Event()
     mgr = NetworkLifecycleManager(
         db_path=tmp_path / "x.db",
         config=cfg,
         registry=reg,
-        kill_switch_event=mp.Event(),
+        kill_switch_event=__ks,
+        executor=InProcessExecutor(db_path=tmp_path / "x.db", registry=reg, kill_switch_event=__ks),
     )
     work = mgr.find_eligible_work()
     assert work == []

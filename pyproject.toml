@@ -26,7 +26,8 @@ include = ["mjolnir*"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 pythonpath = ["."]
-addopts = "-ra --strict-markers -m 'not hardware'"
+addopts = "-ra --strict-markers -m 'not hardware and not subprocess'"
 markers = [
     "hardware: requires real Pi Zero 2W hardware (deselected by default)",
+    "subprocess: forks a child process via multiprocessing; run separately to avoid fork-from-multithreaded deadlock (ADR 0001)",
 ]

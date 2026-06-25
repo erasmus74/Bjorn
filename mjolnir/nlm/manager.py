@@ -34,6 +34,7 @@ class NetworkLifecycleManager:
         config: BjornConfig,
         registry: StageRegistry,
         kill_switch_event: Any,
+        executor: Any = None,
     ):
         self.db_path = Path(db_path)
         self.config = config
@@ -41,6 +42,11 @@ class NetworkLifecycleManager:
         self.kill_switch_event = kill_switch_event
         self.scope_checker = ScopeChecker()
         self.identity_resolver = IdentityResolver()
+        # Executor is injectable: production uses StageExecutor (subprocess,
+        # RLIMIT_AS isolation); tests use InProcessExecutor (no fork, avoids
+        # the ADR 0001 fork-from-multithreaded deadlock). If None, a
+        # StageExecutor is constructed per-run_once() call (production path).
+        self._executor = executor
         # Construct an initial GateEvaluator bound to a fresh bundle so
         # introspection (and tests) can confirm the NLM was wired
         # correctly at construction time. find_eligible_work() rebuilds
@@ -111,11 +117,14 @@ class NetworkLifecycleManager:
 
         net, stage_cls = work[0]
 
-        executor = StageExecutor(
-            db_path=self.db_path,
-            mem_limit_mb=self.config.nlm.stage_memory_limit_mb,
-            kill_switch_event=self.kill_switch_event,
-        )
+        if self._executor is not None:
+            executor = self._executor
+        else:
+            executor = StageExecutor(
+                db_path=self.db_path,
+                mem_limit_mb=self.config.nlm.stage_memory_limit_mb,
+                kill_switch_event=self.kill_switch_event,
+            )
 
         conn, bundle = self._open_db()
         try:

@@ -1,5 +1,9 @@
 """Verifies that kill-switch activation propagates through the pipe to the
 child's Checkpoint object, allowing cooperative cancellation."""
+
+import pytest
+
+pytestmark = pytest.mark.subprocess
 import time
 import multiprocessing as mp
 import pytest

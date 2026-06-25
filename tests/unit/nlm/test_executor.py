@@ -1,5 +1,9 @@
 """Tests for StageExecutor. We use a real subprocess but with stub stages
 registered in a test-only registry to verify the executor protocol."""
+
+import pytest
+
+pytestmark = pytest.mark.subprocess
 import time
 import pytest
 import multiprocessing as mp

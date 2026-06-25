@@ -9,6 +9,7 @@ from mjolnir.config import BjornConfig, DbConfig, NlmConfig, PathsConfig
 from mjolnir.db.connection import ConnectionFactory
 from mjolnir.db.migrations import MigrationRunner
 from mjolnir.db.repositories import bundle_for
+from mjolnir.nlm.in_process_executor import InProcessExecutor
 from mjolnir.nlm.manager import NetworkLifecycleManager
 from mjolnir.stages.base import Stage, StageResult, ResourceProfile, CheckpointPolicy
 from mjolnir.stages.registry import StageRegistry
@@ -138,11 +139,13 @@ def test_nlm_mode_change_filters_eligible_stages(tmp_path: Path, monkeypatch):
 
     cfg = _make_config(tmp_path)
 
+    __ks = mp.Event()
     mgr = NetworkLifecycleManager(
         db_path=tmp_path / "x.db",
         config=cfg,
         registry=reg,
-        kill_switch_event=mp.Event(),
+        kill_switch_event=__ks,
+        executor=InProcessExecutor(db_path=tmp_path / "x.db", registry=reg, kill_switch_event=__ks),
     )
 
     # Default mode is view_only

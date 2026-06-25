@@ -107,15 +107,13 @@ def run_daemon(config: BjornConfig) -> int:
     # Start Flask WebUI in a background thread
     from mjolnir.ui.web.app import create_app
     web_app = create_app(config)
-    web_thread = threading.Thread(
-        target=lambda: web_app.run(
-            host=config.web.bind_interface,
-            port=config.web.port,
-            debug=False,
-            use_reloader=False,
-        ),
-        daemon=True,
-    )
+    # Use Werkzeug's make_server (not app.run) so we can shut it down
+    # cleanly on exit. app.run() blocks forever with no shutdown API,
+    # which leaves a lingering thread that makes the process multi-
+    # threaded — causing fork() deadlocks in tests (ADR 0001).
+    from werkzeug.serving import make_server
+    server = make_server(config.web.bind_interface, config.web.port, web_app)
+    web_thread = threading.Thread(target=server.serve_forever, daemon=True)
     web_thread.start()
 
     # Construct display manager. Try real hardware first; fall back to fake
@@ -156,6 +154,8 @@ def run_daemon(config: BjornConfig) -> int:
             time.sleep(0.1)
 
     display.shutdown()
+    server.shutdown()
+    web_thread.join(timeout=5)
     return 0
 
 
