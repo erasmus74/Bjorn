@@ -32,7 +32,14 @@ class WebConfig:
 class NlmConfig:
     scan_interval_seconds: int = 30
     stage_pool_size: int = 4
-    stage_memory_limit_mb: int = 128
+    # RLIMIT_AS for each forked stage child. The child inherits the daemon's
+    # entire virtual-address-space mapping (copy-on-write), which is ~208 MB
+    # once Flask/Werkzeug/Jinja are resident. A limit below that footprint
+    # makes the child fail to allocate and die before doing any work, so the
+    # daemon silently discovers nothing (Bug D, found in hardware
+    # acceptance). 256 MB clears the daemon footprint with headroom; the
+    # systemd MemoryMax and stage_pool_size bound total usage.
+    stage_memory_limit_mb: int = 256
 
 
 @dataclass(frozen=True)

@@ -14,6 +14,19 @@ def test_load_config_defaults_from_minimal_file(tmp_path: Path):
     assert cfg.disk.warning_gb == 8
 
 
+def test_default_stage_memory_limit_exceeds_daemon_resident_footprint(tmp_path: Path):
+    """A stage runs in a forked child that inherits the daemon's full VM
+    mapping. With Flask resident the parent VmSize is ~208 MB on a Pi Zero
+    2W, so an RLIMIT_AS below that kills the child before it does any work
+    (the daemon then discovers nothing). The default must clear that
+    footprint with headroom. Measured on hardware: 128 MB failed, 256 MB
+    worked. See Bug D / ACCEPTANCE-RUNBOOK."""
+    config_path = tmp_path / "empty.toml"
+    config_path.write_text("")
+    cfg = load_config(config_path)
+    assert cfg.nlm.stage_memory_limit_mb >= 256
+
+
 def test_load_config_overrides(tmp_path: Path):
     config_path = tmp_path / "custom.toml"
     config_path.write_text("""

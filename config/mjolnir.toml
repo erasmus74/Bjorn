@@ -17,7 +17,10 @@ require_auth = false
 [nlm]
 scan_interval_seconds = 30
 stage_pool_size = 4
-stage_memory_limit_mb = 128
+# Each stage runs in a forked child that inherits the daemon's full VM
+# (~208 MB with Flask resident). A limit below that kills the child before
+# it works, so the daemon discovers nothing. 256 MB clears it with headroom.
+stage_memory_limit_mb = 256
 
 [disk]
 warning_gb = 8
