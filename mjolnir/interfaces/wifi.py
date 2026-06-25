@@ -11,13 +11,25 @@ from dataclasses import dataclass
 from mjolnir.interfaces.types import BssidObservation, ScanResult
 from mjolnir.utils import iso_timestamp
 
-_BSS_HEADER_RE = re.compile(r"^BSS ([0-9a-fA-F:]{17})\s+on\s+\S+")
+# Real `iw` emits the BSSID glued to the interface, e.g.
+# `BSS 60:22:32:99:32:52(on wlan0) -- associated`, while older/synthetic
+# samples use `BSS <mac> on wlan0`. Anchor only on the MAC so both parse.
+_BSS_HEADER_RE = re.compile(r"^BSS ([0-9a-fA-F:]{17})")
 _SIGNAL_RE = re.compile(r"^\tsignal:\s+(-?\d+\.\d+)\s+dBm")
+# Channel: synthetic output uses `chan: N`; real `iw` reports it as part of
+# the `DS Parameter set: channel N` information element.
 _CHAN_RE = re.compile(r"^\tchan:\s+(\d+)")
+_DS_CHAN_RE = re.compile(r"DS Parameter set: channel (\d+)")
+# Real `iw` labels the SSID explicitly (`SSID: name`); the name itself may
+# contain `: `, so this is parsed before the bare-line heuristic.
+_SSID_KV_RE = re.compile(r"^\tSSID: (.*)$")
 _SSID_LINE_RE = re.compile(r"^\t([^\t]+)$")
-_PRIVACY_RE = re.compile(r"capabilities:.*Privacy")
-_RSN_AUTH_PSK_RE = re.compile(r"Authentication suites:\s*PSK")
-_RSN_AUTH_SAE_RE = re.compile(r"Authentication suites:\s*SAE")
+# `capability:` is singular in real `iw`; older samples used `capabilities:`.
+_PRIVACY_RE = re.compile(r"capabilit(?:y|ies):.*Privacy")
+# In real output the suites line lists multiple tokens, e.g.
+# `Authentication suites: PSK SAE`, so search the whole line for each token.
+_RSN_AUTH_PSK_RE = re.compile(r"Authentication suites:.*\bPSK\b")
+_RSN_AUTH_SAE_RE = re.compile(r"Authentication suites:.*\bSAE\b")
 
 
 def parse_iw_scan_output(output: str) -> list[BssidObservation]:
@@ -58,23 +70,41 @@ def parse_iw_scan_output(output: str) -> list[BssidObservation]:
             current["channel"] = int(chan_m.group(1))
             continue
 
+        ds_chan_m = _DS_CHAN_RE.search(line)
+        if ds_chan_m and not current["channel"]:
+            current["channel"] = int(ds_chan_m.group(1))
+            continue
+
         if _PRIVACY_RE.search(line):
             current["has_privacy"] = True
             continue
 
+        # A single suites line may list both, e.g. `... suites: PSK SAE`.
+        # Check both without short-circuiting so WPA3 (SAE) isn't masked
+        # by WPA2 (PSK) appearing first on the same line.
+        matched_auth = False
         if _RSN_AUTH_PSK_RE.search(line):
             current["auth_psk"] = True
-            continue
-
+            matched_auth = True
         if _RSN_AUTH_SAE_RE.search(line):
             current["auth_sae"] = True
+            matched_auth = True
+        if matched_auth:
+            continue
+
+        # Real `iw` tags the SSID explicitly. Take it verbatim (an empty
+        # value means a hidden network broadcasting a blank SSID).
+        ssid_kv_m = _SSID_KV_RE.match(line)
+        if ssid_kv_m and current["ssid"] is None:
+            current["ssid"] = ssid_kv_m.group(1)
             continue
 
         ssid_m = _SSID_LINE_RE.match(line)
         if ssid_m and current["ssid"] is None:
             text = ssid_m.group(1).strip()
-            # Exclude key:value lines (freq:, chan:, etc.) and capability blobs
-            if text and ": " not in text and "capabilities:" not in text:
+            # Bare-line fallback for synthetic samples. Exclude key:value
+            # lines (freq:, chan:, `Foo:` sub-headers) and capability blobs.
+            if text and ": " not in text and not text.endswith(":") and "capabilities:" not in text:
                 current["ssid"] = text
 
     if current is not None:

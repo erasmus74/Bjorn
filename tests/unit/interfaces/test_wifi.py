@@ -1,5 +1,62 @@
+from pathlib import Path
+
 import pytest
 from mjolnir.interfaces.wifi import WiFiInterface, parse_iw_scan_output
+
+
+# Real `iw dev wlan0 scan` output captured from a Pi Zero 2W running DietPi
+# (iw 6.x). The synthetic SAMPLE_IW_OUTPUT below does NOT match this format —
+# real iw emits `BSS <mac>(on wlan0)`, `SSID: <name>`, and
+# `DS Parameter set: channel N`, none of which the original parser handled.
+# This fixture is the regression guard for that hardware-acceptance finding.
+_REAL_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "iw_scan_dietpi_real.txt"
+).read_text()
+
+# Expected from the captured fixture (6 BSSIDs, one hidden).
+_REAL_EXPECTED = {
+    "60:22:32:99:32:52": {"ssid": "alwayschooselove", "channel": 11, "signal": -34, "security": "WPA3"},
+    "48:a2:e6:d3:9f:86": {"ssid": "NewThermostat_D39F86", "channel": 1, "signal": -79, "security": "open"},
+    "ac:8f:a9:56:d4:b4": {"ssid": "Babbler", "channel": 1, "signal": -76, "security": "WPA2"},
+    "98:40:d4:0b:1c:aa": {"ssid": "freethetitty", "channel": 2, "signal": -59, "security": "WPA3"},
+    "a8:97:cd:8b:2d:c0": {"ssid": "Satin's Wee Fee", "channel": 4, "signal": -68, "security": "WPA2"},
+    "66:22:32:99:32:52": {"ssid": "", "channel": 11, "signal": -36, "security": "WPA2"},
+}
+
+
+def test_parse_real_iw_extracts_all_bssids():
+    results = parse_iw_scan_output(_REAL_FIXTURE)
+    bssids = {r.bssid for r in results}
+    assert bssids == set(_REAL_EXPECTED.keys())
+
+
+def test_parse_real_iw_extracts_ssids():
+    results = {r.bssid: r for r in parse_iw_scan_output(_REAL_FIXTURE)}
+    for bssid, expected in _REAL_EXPECTED.items():
+        assert results[bssid].ssid == expected["ssid"], bssid
+
+
+def test_parse_real_iw_hidden_network_has_empty_ssid():
+    results = {r.bssid: r for r in parse_iw_scan_output(_REAL_FIXTURE)}
+    assert results["66:22:32:99:32:52"].ssid == ""
+
+
+def test_parse_real_iw_extracts_channels():
+    results = {r.bssid: r for r in parse_iw_scan_output(_REAL_FIXTURE)}
+    for bssid, expected in _REAL_EXPECTED.items():
+        assert results[bssid].channel == expected["channel"], bssid
+
+
+def test_parse_real_iw_extracts_signal():
+    results = {r.bssid: r for r in parse_iw_scan_output(_REAL_FIXTURE)}
+    for bssid, expected in _REAL_EXPECTED.items():
+        assert results[bssid].signal_dbm == expected["signal"], bssid
+
+
+def test_parse_real_iw_classifies_security():
+    results = {r.bssid: r for r in parse_iw_scan_output(_REAL_FIXTURE)}
+    for bssid, expected in _REAL_EXPECTED.items():
+        assert results[bssid].security_type == expected["security"], bssid
 
 
 SAMPLE_IW_OUTPUT = """
