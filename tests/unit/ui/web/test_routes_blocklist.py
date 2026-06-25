@@ -76,3 +76,26 @@ def test_blocklist_add_requires_ssid(client):
     c, _ = client
     response = c.post("/blocklist", data={"reason": "no ssid"})
     assert response.status_code == 400
+
+
+def test_blocklist_add_writes_audit_log(client, tmp_path):
+    """Runbook #8: blocklisting a network is an operator action and must be
+    audited."""
+    c, _ = client
+    c.post("/blocklist", data={"ssid": "AuditMe", "reason": "test"})
+    conn = ConnectionFactory(db_path=tmp_path / "x.db").connect()
+    bundle = bundle_for(conn)
+    rows = bundle.action_log.list_recent(limit=10)
+    assert any(r.action_type.startswith("blocklist.add") for r in rows)
+    conn.close()
+
+
+def test_scope_change_writes_audit_log(client, tmp_path):
+    """Changing a network's scope (e.g. unblocking) is audited."""
+    c, (blocked_id, _) = client
+    c.post(f"/networks/{blocked_id}/scope", data={"scope_state": "enabled"})
+    conn = ConnectionFactory(db_path=tmp_path / "x.db").connect()
+    bundle = bundle_for(conn)
+    rows = bundle.action_log.list_recent(limit=10)
+    assert any(r.action_type.startswith("network.scope") for r in rows)
+    conn.close()

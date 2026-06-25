@@ -83,6 +83,14 @@ def register_routes(app: Flask) -> None:
         try:
             net = bundle.networks.create(ssid=ssid)
             bundle.networks.update_scope_state(net.id, "blocklisted", reason=reason, by="operator")
+            bundle.action_log.insert(
+                global_mode=bundle.system_state.get_global_mode(),
+                scope_basis="operator-blocklisted-network",
+                action_type=f"blocklist.add.network.{net.id}",
+                target_network_id=net.id,
+                outcome="completed",
+                details={"ssid": ssid, "reason": reason},
+            )
         finally:
             conn.close()
         return redirect(url_for("blocklist"))
@@ -96,6 +104,14 @@ def register_routes(app: Flask) -> None:
         conn, bundle = _get_bundle(app)
         try:
             bundle.networks.update_scope_state(network_id, new_state, by="operator")
+            bundle.action_log.insert(
+                global_mode=bundle.system_state.get_global_mode(),
+                scope_basis="operator-changed-network-scope",
+                action_type=f"network.scope.{new_state}.network.{network_id}",
+                target_network_id=network_id,
+                outcome="completed",
+                details={"scope_state": new_state},
+            )
         finally:
             conn.close()
         return redirect(url_for("network_detail", network_id=network_id))
@@ -142,6 +158,12 @@ def register_routes(app: Flask) -> None:
                 bundle.system_state.engage_kill_switch()
             else:
                 bundle.system_state.release_kill_switch()
+            bundle.action_log.insert(
+                global_mode=bundle.system_state.get_global_mode(),
+                scope_basis="killed-by-operator",
+                action_type=f"kill_switch.{action}",
+                outcome="completed",
+            )
         finally:
             conn.close()
         return redirect(url_for("settings"))

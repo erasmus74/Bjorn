@@ -74,3 +74,24 @@ def test_release_kill_switch(client, tmp_path):
     bundle = bundle_for(conn)
     assert bundle.system_state.is_kill_switch_engaged() is False
     conn.close()
+
+
+def test_engage_kill_switch_writes_audit_log(client, tmp_path):
+    """Runbook #8: every operator action is audited, including the kill
+    switch (the most safety-critical control)."""
+    client.post("/settings/kill_switch", data={"action": "engage"})
+    conn = ConnectionFactory(db_path=tmp_path / "x.db").connect()
+    bundle = bundle_for(conn)
+    rows = bundle.action_log.list_recent(limit=5)
+    assert any(r.action_type == "kill_switch.engage" for r in rows)
+    conn.close()
+
+
+def test_release_kill_switch_writes_audit_log(client, tmp_path):
+    client.post("/settings/kill_switch", data={"action": "engage"})
+    client.post("/settings/kill_switch", data={"action": "release"})
+    conn = ConnectionFactory(db_path=tmp_path / "x.db").connect()
+    bundle = bundle_for(conn)
+    rows = bundle.action_log.list_recent(limit=5)
+    assert any(r.action_type == "kill_switch.release" for r in rows)
+    conn.close()
