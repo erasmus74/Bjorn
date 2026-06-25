@@ -14,17 +14,24 @@ This guide covers fresh install, migration from v1, and service management.
 ## Fresh install
 
 ```bash
-# Clone
-git clone https://github.com/erasmus74/Bjorn.git /opt/mjolnir
-cd /opt/mjolnir
+# Clone. IMPORTANT: the checkout directory must NOT be named `mjolnir`.
+# The Python package is also named `mjolnir`, and if the repo directory
+# shares that name, pytest's sys.path handling makes the repo directory
+# masquerade as the package (mjolnir.__path__ points at the repo root, so
+# every submodule import fails). Use /opt/bjorn (repo name) instead.
+git clone https://github.com/erasmus74/Bjorn.git /opt/bjorn
+cd /opt/bjorn
 git checkout feat/v2-platform
 
-# Create venv
+# Create venv. Install NON-editable (`pip install .`, not `-e`): the
+# setuptools editable import-hook finder conflicts with pytest's rootdir
+# handling on the Pi. Runtime deps install the same either way.
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install '.[dev]'
 
-# Create mjolnir user + dirs
+# Create mjolnir user + dirs (the data/log/config dirs keep the mjolnir
+# name — only the source-checkout directory must differ)
 sudo useradd -r -s /bin/false mjolnir
 sudo mkdir -p /var/lib/mjolnir /var/log/mjolnir
 sudo chown mjolnir:mjolnir /var/lib/mjolnir /var/log/mjolnir
@@ -97,9 +104,11 @@ sudo systemctl restart mjolnir
 ## Troubleshooting
 
 - **EPD not displaying:** check SPI is enabled (`raspi-config` > Interfacing > SPI), HAT is seated, `epd_type` in config matches your HAT version. The daemon falls back to a FakeEPDDriver (no display) if the real driver can't initialize — check `journalctl` for the fallback message.
-- **WiFi scan not finding networks:** the daemon needs root or `CAP_NET_RAW` for `iw dev wlan0 scan`. The systemd unit runs as `mjolnir` user; grant capabilities or run the scan stage with elevated privileges.
+- **WiFi scan not finding networks:** the daemon shells out to `iw dev wlan0 scan`, which needs `CAP_NET_RAW` + `CAP_NET_ADMIN`. The shipped systemd unit grants both to the `mjolnir` user via `AmbientCapabilities`, so this works out of the box. If you run the daemon manually (not via the unit), do so as root or grant the caps yourself.
 - **DB locked errors:** ensure only one mjolnir process is running. WAL mode handles concurrent reads but writes are single-writer.
-- **Test suite slow (~150s):** this is the known multiprocessing fork() slowdown (ADR 0001). Use `pytest tests/unit/ui/ tests/unit/db/` for fast iteration during development.
+- **Daemon discovers nothing although `--once` works:** raise `stage_memory_limit_mb` (default 256). A stage runs in a forked child that inherits the daemon's full VM (~208 MB with Flask resident); a limit below that kills the child before it works. `--once` skips Flask so it survives a smaller limit.
+- **`ImportError: cannot import name ... from 'mjolnir.config'` running tests:** the checkout directory is named `mjolnir`, colliding with the package name (see Fresh install note). Re-clone into `/opt/bjorn`.
+- **Test suite slow (~150s) / fork deadlock:** run the two partitions separately — `pytest` (default, excludes the `subprocess` marker) then `pytest -m 'subprocess and not hardware'`. Interleaving subprocess (fork) tests with tests that leave the process multi-threaded can deadlock (ADR 0001). For fast iteration use `pytest tests/unit/ui/ tests/unit/db/`.
 
 ## What's included in sub-project #0
 

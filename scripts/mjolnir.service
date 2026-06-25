@@ -13,9 +13,9 @@ Wants=network-online.target
 Type=simple
 User=mjolnir
 Group=mjolnir
-WorkingDirectory=/opt/mjolnir
-ExecStart=/opt/mjolnir/.venv/bin/python -m mjolnir.main --config /etc/mjolnir/config.toml
-ExecStartPre=/opt/mjolnir/.venv/bin/python -m mjolnir.main --config /etc/mjolnir/config.toml --init-db
+WorkingDirectory=/opt/bjorn
+ExecStart=/opt/bjorn/.venv/bin/python -m mjolnir.main --config /etc/mjolnir/config.toml
+ExecStartPre=/opt/bjorn/.venv/bin/python -m mjolnir.main --config /etc/mjolnir/config.toml --init-db
 
 # Graceful shutdown: SIGTERM, wait up to 30s for stages to checkpoint
 KillSignal=SIGTERM
