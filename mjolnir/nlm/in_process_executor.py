@@ -43,7 +43,7 @@ class InProcessExecutor:
     def execute(
         self,
         stage_name: str,
-        network_id: int,
+        network_id: int | None,
         timeout_seconds: int,
     ) -> ExecutionResult:
         stage_cls = self.registry.get(stage_name)
@@ -57,11 +57,15 @@ class InProcessExecutor:
                 MigrationRunner(conn).initialize_fresh_db()
                 bundle = bundle_for(conn)
 
-                network = bundle.networks.get_by_id(network_id)
-                if network is None:
-                    return ExecutionResult(
-                        status="failed", error=f"network not found: {network_id}"
-                    )
+                # network_id is None for discovery stages, which run
+                # unattached and create network rows as side-effects.
+                network = None
+                if network_id is not None:
+                    network = bundle.networks.get_by_id(network_id)
+                    if network is None:
+                        return ExecutionResult(
+                            status="failed", error=f"network not found: {network_id}"
+                        )
 
                 audit = AuditLogger(
                     action_log=bundle.action_log,
@@ -76,27 +80,42 @@ class InProcessExecutor:
                     config=BjornConfig(),
                     interfaces=interfaces,
                     audit=audit,
-                    workdir=self.db_path.parent / "stages" / str(network_id) / stage_name,
+                    workdir=self.db_path.parent / "stages" / str(network_id or "_discovery") / stage_name,
                     checkpoint=checkpoint,
                 )
 
                 # Cancellation: poll the kill-switch event in a daemon thread
                 # and cancel the checkpoint when it fires. Same cooperative
                 # semantics as the subprocess executor's pipe-watcher.
+                #
+                # The watcher MUST terminate when the stage finishes, not only
+                # when cancelled — otherwise it leaks a live thread per run,
+                # leaving the process multi-threaded. That defeats this
+                # executor's entire purpose (ADR 0001: forking from a
+                # multi-threaded process can deadlock the child) and breaks
+                # any fork()-based test that runs afterward.
+                watcher: threading.Thread | None = None
+                watcher_stop = threading.Event()
                 if self.kill_switch_event is not None:
                     def watch_kill_switch():
-                        while not checkpoint.is_cancelled():
+                        while not watcher_stop.is_set() and not checkpoint.is_cancelled():
                             if self.kill_switch_event.is_set():
                                 checkpoint.cancel(reason="kill_switch")
                                 return
-                            time.sleep(0.05)
+                            watcher_stop.wait(0.05)
 
-                    threading.Thread(
-                        target=watch_kill_switch, daemon=True
-                    ).start()
+                    watcher = threading.Thread(target=watch_kill_switch, daemon=True)
+                    watcher.start()
 
-                stage = stage_cls()
-                result = stage.run(ctx, checkpoint)
+                try:
+                    stage = stage_cls()
+                    result = stage.run(ctx, checkpoint)
+                finally:
+                    # Signal the watcher to exit and wait for it, so this
+                    # method returns with no lingering threads.
+                    watcher_stop.set()
+                    if watcher is not None:
+                        watcher.join(timeout=1.0)
 
                 return ExecutionResult(
                     status=result.status,

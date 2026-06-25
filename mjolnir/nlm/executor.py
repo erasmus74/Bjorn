@@ -60,7 +60,7 @@ class StageExecutor:
     def execute(
         self,
         stage_name: str,
-        network_id: int,
+        network_id: int | None,
         timeout_seconds: int,
     ) -> ExecutionResult:
         # duplex=True so the parent can send {"cmd": "cancel"} to the

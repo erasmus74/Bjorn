@@ -51,7 +51,7 @@ def _watch_pipe_for_cancel(pipe: Any, checkpoint: Checkpoint) -> None:
 
 def run_stage_in_subprocess(
     stage_name: str,
-    network_id: int,
+    network_id: int | None,
     db_path: str,
     config_dict: dict[str, Any],
     mem_limit_mb: int,
@@ -78,10 +78,14 @@ def run_stage_in_subprocess(
         MigrationRunner(conn).initialize_fresh_db()
         bundle = bundle_for(conn)
 
-        network = bundle.networks.get_by_id(network_id)
-        if network is None:
-            pipe.send({"type": "error", "error": f"network not found: {network_id}"})
-            return
+        # network_id is None for discovery stages, which run unattached and
+        # create network rows as side-effects.
+        network = None
+        if network_id is not None:
+            network = bundle.networks.get_by_id(network_id)
+            if network is None:
+                pipe.send({"type": "error", "error": f"network not found: {network_id}"})
+                return
 
         audit = AuditLogger(action_log=bundle.action_log, system_state=bundle.system_state)
         interfaces = InterfaceManager()
@@ -92,7 +96,7 @@ def run_stage_in_subprocess(
             config=BjornConfig(),
             interfaces=interfaces,
             audit=audit,
-            workdir=Path(db_path).parent / "stages" / str(network_id) / stage_name,
+            workdir=Path(db_path).parent / "stages" / str(network_id or "_discovery") / stage_name,
             checkpoint=checkpoint,
         )
 

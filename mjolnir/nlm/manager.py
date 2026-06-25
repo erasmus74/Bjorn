@@ -78,11 +78,21 @@ class NetworkLifecycleManager:
 
             gate_eval = GateEvaluator(bundle)
             self.gate_evaluator = gate_eval
-            networks = bundle.networks.list_eligible_for_processing()
             work: list[tuple[Any, type[Stage]]] = []
 
+            # Discovery stages run unattached (network=None) once per pass.
+            # They observe the environment to find networks, so they must
+            # be schedulable on a fresh install before any network exists.
+            # Mode eligibility still applies; per-network scope/gates do not.
+            discovery_stages = [s for s in eligible_stages if s.is_discovery]
+            for stage_cls in discovery_stages:
+                work.append((None, stage_cls))
+
+            per_network_stages = [s for s in eligible_stages if not s.is_discovery]
+            networks = bundle.networks.list_eligible_for_processing()
+
             for net in networks:
-                for stage_cls in eligible_stages:
+                for stage_cls in per_network_stages:
                     scope_decision = self.scope_checker.check(
                         global_mode=global_mode,
                         kill_switch_engaged=False,
@@ -116,6 +126,10 @@ class NetworkLifecycleManager:
             return 0
 
         net, stage_cls = work[0]
+        # Discovery stages run unattached: there is no network row to key
+        # per-network run-state against. They report success/failure but
+        # their real output is the network rows they create as side-effects.
+        network_id = net.id if net is not None else None
 
         if self._executor is not None:
             executor = self._executor
@@ -126,31 +140,33 @@ class NetworkLifecycleManager:
                 kill_switch_event=self.kill_switch_event,
             )
 
-        conn, bundle = self._open_db()
-        try:
-            bundle.stage_states.mark_running(net.id, stage_cls.name)
-            bundle.networks.set_current_stage(net.id, stage_cls.name)
-        finally:
-            conn.close()
+        if network_id is not None:
+            conn, bundle = self._open_db()
+            try:
+                bundle.stage_states.mark_running(network_id, stage_cls.name)
+                bundle.networks.set_current_stage(network_id, stage_cls.name)
+            finally:
+                conn.close()
 
         result = executor.execute(
             stage_name=stage_cls.name,
-            network_id=net.id,
+            network_id=network_id,
             timeout_seconds=stage_cls.resources.est_duration_seconds * 3,
         )
 
-        conn, bundle = self._open_db()
-        try:
-            if result.status == "succeeded":
-                bundle.stage_states.mark_succeeded(net.id, stage_cls.name)
-                if result.outputs:
-                    bundle.stage_outputs.set_many(net.id, stage_cls.name, result.outputs)
-            elif result.status == "permanently_failed":
-                bundle.stage_states.mark_permanently_failed(net.id, stage_cls.name, result.error)
-            else:
-                bundle.stage_states.mark_failed(net.id, stage_cls.name, result.error)
-            bundle.networks.set_current_stage(net.id, None)
-        finally:
-            conn.close()
+        if network_id is not None:
+            conn, bundle = self._open_db()
+            try:
+                if result.status == "succeeded":
+                    bundle.stage_states.mark_succeeded(network_id, stage_cls.name)
+                    if result.outputs:
+                        bundle.stage_outputs.set_many(network_id, stage_cls.name, result.outputs)
+                elif result.status == "permanently_failed":
+                    bundle.stage_states.mark_permanently_failed(network_id, stage_cls.name, result.error)
+                else:
+                    bundle.stage_states.mark_failed(network_id, stage_cls.name, result.error)
+                bundle.networks.set_current_stage(network_id, None)
+            finally:
+                conn.close()
 
         return 1

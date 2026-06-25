@@ -48,7 +48,13 @@ def _make_config(tmp_path: Path) -> BjornConfig:
     )
 
 
+@pytest.mark.subprocess
 def test_nlm_runs_stage_in_subprocess_and_persists_outputs(tmp_path: Path, monkeypatch):
+    # This test forks a real child via the default StageExecutor, so it must
+    # carry the `subprocess` marker (ADR 0001): run it in its own process,
+    # never interleaved with tests that leave the parent multi-threaded
+    # (e.g. the daemon-loop test's Flask server thread), which would make
+    # the fork unreliable.
     # Setup DB with one network
     factory = ConnectionFactory(db_path=tmp_path / "x.db")
     conn = factory.connect()

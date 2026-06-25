@@ -81,6 +81,12 @@ class Stage(ABC):
     checkpoint_policy: ClassVar[CheckpointPolicy]
     operates_in_view_only: ClassVar[bool] = False
     requires_extra_auth: ClassVar[bool] = False
+    # Discovery stages observe the environment to *find* networks rather
+    # than acting on a specific one. The NLM schedules them once per pass
+    # with no network attachment (ctx.network is None), so they run on a
+    # fresh install before any network exists. Non-discovery stages are
+    # scheduled per eligible network.
+    is_discovery: ClassVar[bool] = False
 
     @abstractmethod
     def can_run(self, ctx: NetworkContext) -> bool: ...

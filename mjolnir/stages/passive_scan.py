@@ -33,6 +33,9 @@ class PassiveScanStage(Stage):
     )
     checkpoint_policy: ClassVar[CheckpointPolicy] = CheckpointPolicy.RESTART_SAFE
     operates_in_view_only: ClassVar[bool] = True
+    # Passive scanning *discovers* networks; it runs unattached (no
+    # specific network) and creates network rows as it observes beacons.
+    is_discovery: ClassVar[bool] = True
 
     def __init__(self):
         self._resolver = IdentityResolver()

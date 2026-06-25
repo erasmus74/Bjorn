@@ -185,3 +185,85 @@ def test_kill_switch_prevents_new_work(manager):
     manager.kill_switch_event.set()
     work = manager.find_eligible_work()
     assert work == []
+
+
+class DiscoveryStubStage(Stage):
+    """A discovery-class stage: runs without a network attachment and
+    creates networks as side-effects (mirrors PassiveScanStage)."""
+    name = "discovery_stub_stage"
+    description = "test discovery stage"
+    resources = ResourceProfile()
+    checkpoint_policy = CheckpointPolicy.RESTART_SAFE
+    operates_in_view_only = True
+    is_discovery = True
+
+    def can_run(self, ctx):
+        return True
+
+    def run(self, ctx, checkpoint):
+        ctx.db.networks.create(ssid="DiscoveredByStub")
+        return StageResult(status="succeeded")
+
+
+def _make_discovery_manager(tmp_path, monkeypatch):
+    """A manager over an EMPTY db (no networks) with a discovery stage."""
+    factory = ConnectionFactory(db_path=tmp_path / "x.db")
+    conn = factory.connect()
+    factory.apply_schema(conn)
+    MigrationRunner(conn).initialize_fresh_db()
+    conn.close()
+
+    reg = StageRegistry()
+    reg.register(DiscoveryStubStage)
+    import mjolnir.nlm.runner as runner_mod
+    monkeypatch.setattr(runner_mod, "registry", reg)
+
+    cfg = BjornConfig(
+        paths=PathsConfig(data_dir=tmp_path, log_dir=tmp_path / "logs"),
+        db=DbConfig(data_dir=tmp_path),
+        nlm=NlmConfig(stage_memory_limit_mb=_TEST_MEM_LIMIT_MB),
+    )
+    __ks = mp.Event()
+    mgr = NetworkLifecycleManager(
+        db_path=tmp_path / "x.db",
+        config=cfg,
+        registry=reg,
+        kill_switch_event=__ks,
+        executor=InProcessExecutor(db_path=tmp_path / "x.db", registry=reg, kill_switch_event=__ks),
+    )
+    return mgr
+
+
+def test_discovery_stage_scheduled_with_no_networks(tmp_path, monkeypatch):
+    """A discovery stage is eligible even when the DB has zero networks,
+    paired with network=None. This is the fresh-install bootstrap path."""
+    mgr = _make_discovery_manager(tmp_path, monkeypatch)
+    work = mgr.find_eligible_work()
+    stage_names = {s.name for _, s in work}
+    assert "discovery_stub_stage" in stage_names
+    # Discovery work carries no network attachment.
+    discovery_items = [(net, s) for net, s in work if s.name == "discovery_stub_stage"]
+    assert all(net is None for net, _ in discovery_items)
+
+
+def test_discovery_stage_runs_and_creates_networks(tmp_path, monkeypatch):
+    """run_once executes the unattached discovery stage, which discovers
+    a network on a previously empty DB."""
+    mgr = _make_discovery_manager(tmp_path, monkeypatch)
+    executed = mgr.run_once()
+    assert executed == 1
+
+    conn = ConnectionFactory(db_path=mgr.db_path).connect()
+    try:
+        bundle = bundle_for(conn)
+        discovered = bundle.networks.find_by_ssid("DiscoveredByStub")
+        assert len(discovered) == 1
+    finally:
+        conn.close()
+
+
+def test_discovery_stage_blocked_by_kill_switch(tmp_path, monkeypatch):
+    """Kill switch still suppresses discovery work."""
+    mgr = _make_discovery_manager(tmp_path, monkeypatch)
+    mgr.kill_switch_event.set()
+    assert mgr.find_eligible_work() == []
